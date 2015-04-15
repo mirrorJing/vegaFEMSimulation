@@ -87,7 +87,7 @@ void AnisotropicInternalForces::loadElasticTensorOnCoaseMesh(const string &elast
 			break;	
 	}
 	rfile.close();
-	//store the coarse_elastic_tensor for each element
+	//store the elastic_tensor for each element
 	ele_elastic_tensor_vector_=(double***)malloc(sizeof(double)*ele_num_*6*6);
 	for(unsigned int ele_idx = 0; ele_idx < ele_num_; ++ele_idx)
 	{
@@ -119,7 +119,7 @@ Mat3d AnisotropicInternalForces::getInistialDisplacementMatrixOnEachElement(unsi
 	
 	for(unsigned int idx=0;idx < ele_vert_num_;++idx)
 	{
-		vert_idx[idx]=volumetric_mesh_->getVertexIndex(ele_idx,idx);
+		vert_idx[idx]=volumetric_mesh_->getVertexIndex(ele_idx,idx); //get global vertex index
 		vert_pos[idx]=*volumetric_mesh_->getVertex(vert_idx[idx]);
 	}
 	for(unsigned int dim = 0; dim < 3; ++dim)
@@ -179,6 +179,7 @@ vector<Mat3d> AnisotropicInternalForces::getCurrentDisplacementMatrixOnAllElemen
 }
 Mat3d AnisotropicInternalForces::getDeformationGradient(const Mat3d init_dis_matrix, const Mat3d current_dis_matrix) const
 {
+	//the initial F is identity
 	Mat3d result(1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0);
 	result=current_dis_matrix*inv(init_dis_matrix);
 	for(int i=0;i<3;++i)
@@ -258,7 +259,7 @@ Mat3d AnisotropicInternalForces::secondPiolaKirchhoffStress(unsigned int ele_idx
 			result[i]+=ele_elastic_tensor_vector_[ele_idx][i][j]*strain_tensor_vector[j];
 		}	
 	}
-	Mat3d result_matrix;
+	Mat3d result_matrix(0.0);
 	for(unsigned int i=0;i<3;++i)
 	{
 		result_matrix[i][i]=result[i];
@@ -328,145 +329,3 @@ void AnisotropicInternalForces::ComputeForces(const double * vertexDisplacements
 		}
 	}
 }
-
-	//
-//Vec3d * AnisotropicInternalForces::getWeightGradient(unsigned int ele_idx) const
-//{
-//	/*if(!volumetric_mesh_)
-//	{
-//	std::cout<<"Volumetric mesh is null!\n";
-//	}
-//	TetMesh *tet_mesh=(TetMesh*)volumetric_mesh_;*/
-//	Vec3d *weight_gradient;	
-//	/*Vec3d *vert_pos;	
-//	for(unsigned int i=0;i<4;++i)
-//	{
-//		vert_pos[i] = *tet_mesh->getVertex(ele_idx,i);
-//	}
-//	weight_gradient[0] = cross(vert_pos[3]-vert_pos[1],vert_pos[2]-vert_pos[1]);
-//	weight_gradient[1] = cross(vert_pos[2]-vert_pos[0],vert_pos[3]-vert_pos[2]);
-//	weight_gradient[2] = cross(vert_pos[1]-vert_pos[3],vert_pos[0]-vert_pos[3]);
-//	weight_gradient[3] = cross(vert_pos[0]-vert_pos[2],vert_pos[1]-vert_pos[0]);
-//	double tet_volume=tet_mesh_->getTetVolume(tet_mesh->getVertex(ele_idx,0),tet_mesh->getVertex(ele_idx,1),tet_mesh->getVertex(ele_idx,2),tet_mesh->getVertex(ele_idx,3));
-//	for(unsigned i=0;i<4;++i)
-//	{
-//		weight_gradient[i]=weight_gradient[i]/(tet_volume*6.0);
-//	}	*/
-//	return weight_gradient;
-//}
-//void AnisotropicInternalForces::getDisplacementDifferentiationMatrix(unsigned int ele_idx, double **dis_differentiation_vector)
-//{
-//	/*if(!volumetric_mesh_)
-//	{
-//		std::cout<<"volumetric mesh is not exist!\n";
-//		return 0;
-//	}
-//	superMatrixIndices = (int**) malloc (sizeof(int*) * numRows);
-//
-//	Vec3d *weight_gradient=getWeightGradient(ele_idx);
-//	unsigned int ele_vert_num=volumetric_mesh_->getNumElementVertices();
-//	unsigned int row_num = 6;
-//	unsigned int col_num = 3 * ele_vert_num;
-//	dis_differentiation_vector = (double**)malloc(sizeof(double)*row_num*col_num);
-//	TetMesh *tet_mesh=(TetMesh*)volumetric_mesh_;
-//	for(unsigned int i=0;i<dis_differentiation_vector.size();++i)
-//	{
-//		for(unsigned int dim=0; dim < 3; ++dim)
-//		{
-//			for(unsigned int ele_vert_idx = 0; ele_vert_idx < ele_vert_num; ++ele_vert_idx)
-//			{
-//				num=3*ele_vert_idx+dim;
-//				dis_differentiation_vector[i][num]=weight_gradient[ele_vert_idx][dim];
-//			}		
-//		}
-//	}	
-//	for(unsigned int ele_vert_idx = 0; ele_vert_idx < ele_vert_num; ++ele_vert_idx)
-//	{
-//		num=3*ele_vert_idx;
-//		dis_differentiation_vector[3][num+1]=weight_gradient[ele_vert_idx][2];
-//		dis_differentiation_vector[3][num+2]=weight_gradient[ele_vert_idx][1];
-//		dis_differentiation_vector[4][num]=weight_gradient[ele_vert_idx][2];
-//		dis_differentiation_vector[4][num+2]=weight_gradient[ele_vert_idx][0];
-//		dis_differentiation_vector[5][num]=weight_gradient[ele_vert_idx][1];
-//		dis_differentiation_vector[5][num+1]=weight_gradient[ele_vert_idx][0];
-//	}*/
-//	//return dis_differentiation_vector_;
-//}
-//SparseMatrix * AnisotropicInternalForces::ComputeStiffnessMatrixForEachElement(const unsigned int &ele_idx) const
-//{
-//	if(!volumetric_mesh_)
-//	{
-//		std::cout<<"Volumetric mesh is not exsit!\n";
-//		//return;
-//	}	
-//	TetMesh * tet_mesh=(TetMesh*)volumetric_mesh_;
-//	unsigned int ele_vert_num=volumetric_mesh_->getNumElementVertices();
-//	SparseMatrixOutline * matrix_outline;
-//	matrix_outline = new SparseMatrixOutline(3*ele_vert_num);
-//	SparseMatrix * stiffness_matrix_each_element;
-//	stiffness_matrix_each_element = new SparseMatrix(matrix_outline);
-//	//double tet_volume=tet_mesh_->getTetVolume(tet_mesh->getVertex(ele_idx,0),tet_mesh->getVertex(ele_idx,1),tet_mesh->getVertex(ele_idx,2),tet_mesh->getVertex(ele_idx,3));
-//	//
-//	//int row_num=3*ele_vert_num;
-//	//int col_num=6;
-//	//double ** dis_differentiation_vector=getDisplacementDifferentiationMatrix(ele_idx);
-//	////dis_differentiation_vector = (double*)malloc(sizeof(double)*col_num*row_num);
-//	//double ** trans_matrix;
-//	//trans_matrix = (double*)malloc(sizeof(double)*row_num*col_num);
-//	////trans_matrix.resize(3*ele_vert_num);
-//	///*for(unsigned int i=0;i<3*ele_vert_num;++i)
-//	//{
-//	//	trans_matrix[i].resize(6,0.0);
-//	//}*/
-//	//for(unsigned int row_idx=0;row_idx<3*ele_vert_num;++row_idx)
-//	//{
-//	//	for(unsigned int col_idx = 0; col_idx <6;++col_idx)
-//	//	{
-//	//		trans_matrix[row_idx][col_idx]=dis_differentiation_vector[col_idx][row_idx];
-//	//	}
-//	//}
-//	//vector<double> result_vector;
-//	//result_vector.resize(6,0.0);
-//	//for(unsigned int i=0;i<result_vector.size();++i)
-//	//{
-//	//	double * result;
-//	//	result = MultiplyVector(trans_matrix[i],elastic_tensor_matrix_);
-//	//	result = MultiplyVector(result,dis_differentiation_vector[i]);
-//	//	result_vector[i]=result;
-//	//}
-//	return stiffness_matrix_each_element;
-//}
-//void AnisotropicInternalForces::ComputeStiffnessMatrix(SparseMatrix * vert_stiffness_matrix)//3n*3n for the global stiffness matrix
-//{
-//	//if(!volumetric_mesh_)
-//	//{
-//	//	std::cout<<"Volumetric mesh is not exsit!\n";
-//	//	return;
-//	//}	
-//	//SparseMatrixOutline * matrix_outline(3*volumetric_mesh_->getNumVertices());
-//	//vert_stiffness_matrix = new SparseMatrix(matrix_outline);
-//	////TetMesh *tet_mesh=(TetMesh*)volumetric_mesh_;
-//	//for(unsigned int ele_idx=0; ele_idx < volumetric_mesh_->getNumElements(); ++ele_idx)
-//	//{
-//	//	double **ele_stiffness_matrix;
-//	//	ele_stiffness_matrix=ComputeStiffnessMatrixForEachElement(ele_idx);		//12*12 for each element
-//	//	for(unsigned int idx = 0;idx < volumetric_mesh_->getNumElementVertices(); ++idx)
-//	//	{
-//	//		int vert_idx=volumetric_mesh_->getVertexIndex(ele_idx,idx);
-//	//		for(unsigned int i = 0; i < 3; ++i)
-//	//		{
-//	//			for(unsigned int j= 0; j < 3; ++j)
-//	//			{
-//	//				vert_stiffness_matrix[3*vert_idx+i][3*vert_idx+j]=ele_stiffness_matrix[i][j];
-//	//			}
-//	//		}	
-//	//	}		
-//	//}
-//}
-
-//double AnisotropicInternalForces::ComputeEnergy(const double * vertexDisplacements)
-//{
-//	//to do
-//	double energy = 0;
-//	return energy;
-//}

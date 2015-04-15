@@ -29,26 +29,21 @@ AnisotropicStiffnessMatrix::AnisotropicStiffnessMatrix(AnisotropicInternalForces
 	// build stiffness matrix skeleton 
 	SparseMatrix * stiffnessMatrixTopology;
 	GetStiffnessMatrixTopology(&stiffnessMatrixTopology);
-
 	// build acceleration indices
 	row_ = (int**) malloc (sizeof(int*) * ele_num_);
 	column_ = (int**) malloc (sizeof(int*) * ele_num_);
-
 	for (int el=0; el < ele_num_; el++)
 	{
 		row_[el] = (int*) malloc (sizeof(int) * ele_vert_num_);
 		column_[el] = (int*) malloc (sizeof(int) * ele_vert_num_ * ele_vert_num_);
-
 		for(int ver=0; ver<ele_vert_num_; ver++)
 			row_[el][ver] = volumetric_mesh_->getVertexIndex(el, ver);
-
 		// seek for value row[j] in list associated with row[i]
 		for(int i=0; i<ele_vert_num_; i++)
 			for(int j=0; j<ele_vert_num_; j++)
 				column_[el][ele_vert_num_ * i + j] =
 				stiffnessMatrixTopology->GetInverseIndex(3*row_[el][i],3*row_[el][j]) / 3;
 	}
-
 	delete(stiffnessMatrixTopology);
 }
 
@@ -152,8 +147,8 @@ void AnisotropicStiffnessMatrix::loadElasticTensorOnCoaseMesh(const string &elas
 		}
 	}	
 }
-Mat3d AnisotropicStiffnessMatrix::getInistialDisplacementMatrixOnEachElement(unsigned int ele_idx) const//Dm
-{
+Mat3d AnisotropicStiffnessMatrix::getInistialDisplacementMatrixOnEachElement(unsigned int ele_idx) const
+{//Dm
 	if(!volumetric_mesh_)
 	{
 		std::cout<<"Volumetric mesh is not exist!\n";
@@ -164,7 +159,6 @@ Mat3d AnisotropicStiffnessMatrix::getInistialDisplacementMatrixOnEachElement(uns
 	vert_idx=(int*)malloc(sizeof(int)*ele_vert_num_);
 	vert_pos=(Vec3d*)malloc(sizeof(Vec3d)*ele_vert_num_);
 	result_vec=(Vec3d*)malloc(sizeof(Vec3d)*ele_vert_num_);
-
 	for(unsigned int idx=0;idx < ele_vert_num_;++idx)
 	{
 		vert_idx[idx]=volumetric_mesh_->getVertexIndex(ele_idx,idx);
@@ -189,8 +183,7 @@ vector<Mat3d> AnisotropicStiffnessMatrix::getCurrentDisplacementMatrixOnAllEleme
 	{
 		std::cout<<"Volumetric mesh is not exist!\n";
 	}
-	vector<Mat3d> result_matrix_vector(ele_num_);
-	
+	vector<Mat3d> result_matrix_vector(ele_num_);	
 	for(unsigned int ele_idx = 0; ele_idx < ele_num_; ++ele_idx)
 	{		
 		int * vert_idx;
@@ -248,6 +241,8 @@ Mat3d AnisotropicStiffnessMatrix::getDeformationGradient(const Mat3d init_dis_ma
 
 Mat3d AnisotropicStiffnessMatrix::getDeformationGradientDerivative(unsigned int ele_idx,unsigned int vert_idx,unsigned int vert_idx_dim) const
 {
+	//vert_idx denotes the j-th vertex, vert_idx_dim is the k-th coordinate of the j-th vertex
+	//we get the result as dF_i/dx_j^k, which is the derivative force of vertex i to the vertex j on the coordinate k
 	//identity vector definition
 	if((vert_idx>4)||(vert_idx_dim>3))
 	{
@@ -260,6 +255,7 @@ Mat3d AnisotropicStiffnessMatrix::getDeformationGradientDerivative(unsigned int 
 	e_vector[1][1]=1.0;
 	e_vector[2][2]=1.0;
 	Mat3d e_matrix(0.0);
+	//for the j=1,2,3 we have dF/dx_j^k=e_k*e_j^T*Dm^-1
 	for(unsigned int row_idx=0;row_idx<3;++row_idx)
 	{
 		for(unsigned int col_idx=0;col_idx<3;++col_idx)
@@ -386,14 +382,12 @@ double * AnisotropicStiffnessMatrix::getCauchyStrainTensorDerivative(unsigned in
 Mat3d AnisotropicStiffnessMatrix::firstPiolaKirchhoffStressDerivative(unsigned int ele_idx,const Mat3d F,
 					unsigned int vert_idx, unsigned int vert_idx_dim,AnisotropicStiffnessMatrix::StrainType strain_type) const
 {
-	//---dP/dx_j^k=dF/dx_j^k*CE+FC*dE/dx_j^k;
-	//compute CE and convert a 6*1 vector to a 3*3 matrix
+	//---dP/dx_j^k=dF/dx_j^k*(C:E)+F(C:dE/dx_j^k);
+	//compute C:E and convert a 6*1 vector to a 3*3 matrix
 	double * elastic_multiply_strain;
 	elastic_multiply_strain=(double*)malloc(sizeof(double)*6);
 	memset(elastic_multiply_strain, 0, sizeof(double) * 6);
 	const double * strain_tensor_vector;	
-	//strain_tensor_vector=(double*)malloc(sizeof(double)*6);
-	//memset(strain_tensor_vector, 0, sizeof(double) * 6);
 	if(strain_type==CAUCHY_STRAIN)
 		strain_tensor_vector=getCauchyStrainTensor(F);
 	else if(strain_type==GREEN_STRAIN)
@@ -420,7 +414,6 @@ Mat3d AnisotropicStiffnessMatrix::firstPiolaKirchhoffStressDerivative(unsigned i
 	elastic_multiply_strain_derivative=(double*)malloc(sizeof(double)*6);
 	memset(elastic_multiply_strain_derivative, 0, sizeof(double) * 6);
 	double * strain_tensor_derivative_vector;
-	//memset(strain_tensor_derivative_vector, 0, sizeof(double) * 6);
 	if(strain_type==CAUCHY_STRAIN)
 		strain_tensor_derivative_vector=getCauchyStrainTensorDerivative(ele_idx,vert_idx,vert_idx_dim,F);
 	else if(strain_type==GREEN_STRAIN)
@@ -441,7 +434,6 @@ Mat3d AnisotropicStiffnessMatrix::firstPiolaKirchhoffStressDerivative(unsigned i
 	elastic_multiply_strain_derivative_matrix[1][2]=elastic_multiply_strain_derivative_matrix[2][1]=0.5*elastic_multiply_strain_derivative[3];
 	elastic_multiply_strain_derivative_matrix[0][2]=elastic_multiply_strain_derivative_matrix[2][0]=0.5*elastic_multiply_strain_derivative[4];
 	elastic_multiply_strain_derivative_matrix[0][1]=elastic_multiply_strain_derivative_matrix[1][0]=0.5*elastic_multiply_strain_derivative[5];
-		
 	Mat3d result_matrix(0.0);
 	result_matrix=F_derivative*elastic_multiply_strain_matrix;
 	result_matrix+=F*elastic_multiply_strain_derivative_matrix;
@@ -471,11 +463,7 @@ void AnisotropicStiffnessMatrix::ComputeStiffnessMatrix(double * vertexDisplacem
 		double ele_volume=tet_mesh_->getTetVolume(tet_mesh_->getVertex(ele_idx,0),tet_mesh_->getVertex(ele_idx,1),tet_mesh_->getVertex(ele_idx,2),tet_mesh_->getVertex(ele_idx,3));
 		Mat3d init_dis_matrix=getInistialDisplacementMatrixOnEachElement(ele_idx);
 		Mat3d F=getDeformationGradient(init_dis_matrix,current_dis_matrix[ele_idx]);
-		/*for(unsigned int i=0;i<4;++i)
-			for(unsigned int j=0;j<3;++j)
-				std::cout<<"("<<i<<","<<j<<"):"<<getDeformationGradientDerivative(ele_idx,i,j)<<"\n";*/
-		
-//		//----dH/dx_j^k=d[f_1 f_2 f_3]/dx_j^k		
+//		//----dH/dx_j^k=d[f_0 f_1 f_2]/dx_j^k		
 		for(unsigned int j=0;j<ele_vert_num_;++j)
 		{
 			//compute dH/dx_j^k
@@ -485,7 +473,7 @@ void AnisotropicStiffnessMatrix::ComputeStiffnessMatrix(double * vertexDisplacem
 			{
 				H_derivative_matrix[k]=ele_volume*firstPiolaKirchhoffStressDerivative(ele_idx,F,j,k,strain_type)*inv(trans(init_dis_matrix));										
 			}	
-			vector<Mat3d> f_derivative_matrix(ele_vert_num_);//stores df0/dx,df1/dx,df2/dx,df3/dx	
+			vector<Mat3d> f_derivative_matrix(ele_vert_num_);//stores df0/dx_j,df1/dx_j,df2/dx_j,df3/dx_j	
 			f_derivative_matrix.clear();
 			f_derivative_matrix[j].set(0.0);
 			for(unsigned int row_idx=0;row_idx<3;++row_idx)
@@ -498,9 +486,10 @@ void AnisotropicStiffnessMatrix::ComputeStiffnessMatrix(double * vertexDisplacem
 				}					
 			}
 			f_derivative_matrix[3]=-(1.0)*(f_derivative_matrix[0]+f_derivative_matrix[1]+f_derivative_matrix[2]);
-			for(unsigned int l=0;l<ele_vert_num_;++l)
+			for(unsigned int i=0;i<ele_vert_num_;++i)
 			{
-				AddMatrix3x3Block(l, j, ele_idx, f_derivative_matrix[l], sparseMatrix);
+				//assemble the 3*3 matrix of df_i/dx_j
+				AddMatrix3x3Block(i, j, ele_idx, f_derivative_matrix[i], sparseMatrix);
 			}
 		}	
 	}

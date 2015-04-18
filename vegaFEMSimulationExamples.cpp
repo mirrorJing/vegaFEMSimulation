@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 #include <ctime>
+#include <math.h>
 using namespace std;
 using std::fstream;
 using std::stringstream;
@@ -126,31 +127,24 @@ int numSolverThreads;
 
 // simulation
 int syncTimestepWithGraphics=1;
-float timeStep = 1.0 / 30;
+float timeStep = 1.0;
+int timeStepCounter=0;
+int totalSteps=0;
+double frame_rate=1.0;
+int totalFrame = 0;
+double total_simulation_time=0.0;
+
 float newmarkBeta = 0.25;
 float newmarkGamma = 0.5;
-int use1DNewmarkParameterFamily = 1;
-int substepsPerTimeStep = 1;
+int stepsPerFrame = 1;
 double principalStretchThreshold;
-int timeStepCounter=0;
-double fps = 0.0;
-const int fpsBufferSize = 5;
-int fpsHead = 0;
-double fpsBuffer[fpsBufferSize];
-double systemSolveTime = 0.0;
-double systemSolveLocalTime = 0.0;
-const int systemSolveBufferSize = 50;
-int systemSolveHead = 0;
-double systemSolveBuffer[systemSolveBufferSize];
 int enableTextures = 0;
 int staticSolver = 0;
-int graphicFrame = 0;
-int lockAt30Hz = 0;
 int pulledVertex = -1;
 int forceNeighborhoodSize = 5;
 int dragStartX, dragStartY;
-int timestepCounter = 0;
-int subTimestepCounter = 0;
+
+int test_case=0;
 int numFixedVertices;
 int * fixedVertices;
 int numForceLoads = 0;
@@ -171,7 +165,7 @@ AnisotropicForceModel * anisotropicForceModel = NULL;
 CorotationalLinearFEMForceModel * corotationalLinearFEMForceModel = NULL;
 bool addGravity=false;
 double g=0;
-
+unsigned int output_mode=1;
 VolumetricMesh * volumetricMesh = NULL;
 TetMesh * tetMesh = NULL;
 Graph * meshGraph = NULL;
@@ -205,6 +199,8 @@ void addGravitySwitch(bool addGravity);
 void displayFunction(void);
 void saveCurrentObjectSurface(int code);
 void changeSimulationMode(int code);
+void initFunction(int test_case_);
+void simulationFunction(int test_case_);
 
 //font is, for example, GLUT_BITMAP_9_BY_15
 void print_bitmap_string(float x, float y, float z, void * font, char * s)
@@ -234,38 +230,6 @@ void saveCurrentObjectSurface(int code)
 	mesh->save(outputFileName,0);
 	cout<<outputFileName<<" saved.\n";
 }
-/*
-// renders the ground plane
-void RenderGroundPlane(double groundPlaneHeight, double rPlane, double gPlane, double bPlane, double ambientFactor, double diffuseFactor, double specularFactor, double shininess)
-{
-	glEnable(GL_POLYGON_OFFSET_FILL);
-	glPolygonOffset(1.0,1.0);
-
-	float planeAmbient[4] = { (float)(ambientFactor*rPlane), (float)(ambientFactor*gPlane), (float)(ambientFactor*bPlane), 1.0};
-	float planeDiffuse[4] = { (float)(diffuseFactor*rPlane), (float)(diffuseFactor*gPlane), (float)(diffuseFactor*bPlane), 1.0};
-	float planeSpecular[4] = { (float)(specularFactor*rPlane), (float)(specularFactor*gPlane), (float)(specularFactor*bPlane), 1.0};
-	float planeShininess = shininess; 
-	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, planeAmbient);
-	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, planeDiffuse);
-	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, planeSpecular);
-	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, planeShininess);
-
-	glNormal3f(0,1,0);
-	const int planeResolution = 100;
-	float planeIncrement = groundPlaneSize / planeResolution;
-	for(int i=0; i<planeResolution; i++)
-		for(int j=0; j<planeResolution; j++)
-		{
-			glBegin(GL_QUADS);
-			glVertex3f(-groundPlaneSize/2 + i * planeIncrement, groundPlaneHeight, -groundPlaneSize/2 + j * planeIncrement);
-			glVertex3f(-groundPlaneSize/2 + i * planeIncrement, groundPlaneHeight, -groundPlaneSize/2 + (j+1) * planeIncrement);
-			glVertex3f(-groundPlaneSize/2 + (i+1) * planeIncrement, groundPlaneHeight, -groundPlaneSize/2 + (j+1) * planeIncrement);
-			glVertex3f(-groundPlaneSize/2 + (i+1) * planeIncrement, groundPlaneHeight, -groundPlaneSize/2 + j * planeIncrement);
-			glEnd();
-		}
-		glDisable(GL_POLYGON_OFFSET_FILL);
-}
-*/
 
 //***********************************************graphics loop function***************************************
 // graphics loop function.
@@ -435,7 +399,60 @@ void displayFunction(void)
 	}
 	glutSwapBuffers();
 }
-
+/***********************************************************************************************/
+//output files loop function
+void outputFilesLoop(void)
+{
+	// apply any scripted force loads
+	PerformanceCounter each_frame_performance_counter;
+	each_frame_performance_counter.StartCounter();
+	double each_frame_time=0.0;
+	while(timeStepCounter<totalSteps)
+	{
+		memcpy(f_ext, f_extBase, sizeof(double) * 3 * simulation_vertice_num);
+		if (timeStepCounter < numForceLoads)
+		{
+			printf("  External forces read from the binary input file.\n");
+			for(int i=0; i<3*simulation_vertice_num; i++)
+				f_ext[i] += forceLoads[ELT(3*simulation_vertice_num, i, timeStepCounter)];
+		}
+		//apply the penalty collision forces with planes in scene
+		if(planeNumber>0)
+		{
+			planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),f_col);
+			for(int i=0;i<3*simulation_vertice_num;++i)
+			{
+				f_ext[i]+=f_col[i];
+			}
+		}
+		integratorBaseSparse->SetExternalForces(f_ext);
+		int code = integratorBase->DoTimestep();
+		cout<<"timeStep "<<timeStepCounter<<" begins \n";
+		memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);	
+		volumetricSurfaceMesh->SetVertexDeformations(u);	
+		VolumetricMesh::interpolate(u,uRenderSurface,objectRenderSurfaceMesh->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum,
+			objectRenderSurfaceMeshInterpolationVertices,objectRenderSurfaceMeshInterpolationWeights);
+		objectRenderSurfaceMesh->SetVertexDeformations(uRenderSurface);
+		volumetricSurfaceMesh->BuildNormals();
+		renderingMesh->BuildNormals();
+		//save object surface mesh to files			
+		if(timeStepCounter%((int)(1.0/(frame_rate*timeStep)))==0)
+		{
+			saveCurrentObjectSurface(0);
+			each_frame_performance_counter.StopCounter();
+			each_frame_time=each_frame_performance_counter.GetElapsedTime();
+			std::cout<<"Current frame simulation time is "<<each_frame_time<<" s.\n";
+			total_simulation_time+=each_frame_time;
+			if(timeStepCounter==(totalSteps-1))
+			{
+				std::cout<<"Total simulation time is "<<total_simulation_time<<" s; Average: "<<total_simulation_time/totalFrame<<" s/frame.\n";
+			}	
+			each_frame_performance_counter.StartCounter();
+		}
+		timeStepCounter++;
+	}	
+	each_frame_performance_counter.StopCounter();
+}
 // called periodically by GLUT:
 void idleFunction(void)
 {
@@ -503,11 +520,11 @@ void idleFunction(void)
 			}
 		}
 		// apply any scripted force loads
-		if (timestepCounter < numForceLoads)
+		if (timeStepCounter < numForceLoads)
 		{
 			printf("  External forces read from the binary input file.\n");
 			for(int i=0; i<3*simulation_vertice_num; i++)
-				f_ext[i] += forceLoads[ELT(3*simulation_vertice_num, i, timestepCounter)];
+				f_ext[i] += forceLoads[ELT(3*simulation_vertice_num, i, timeStepCounter)];
 		}
 		//apply the penalty collision forces with planes in scene
 		if(planeNumber>0)
@@ -522,90 +539,98 @@ void idleFunction(void)
 		// set forces to the integrator
 		integratorBaseSparse->SetExternalForces(f_ext);
 		//static int count_num=0;
-		for(int i=0; i<substepsPerTimeStep; i++)
+		//std::cout<<"aaaaaaaaaaaaa"<<totalSteps<<"\n";
+		//std::cout<<"timeStepCounter="<<timeStepCounter<<"\n";
+		if(timeStepCounter < totalSteps)
 		{
-			//count_num++;
-			//if((count_num<4)&&(count_num>1))
-			//{			
-			////test K
-			//double *u1,*du,*f1,*f0,*multi_k_du,*error_value;
-			//u1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-			//du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-			//f1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-			//f0=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-			//multi_k_du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-			//error_value=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-			//SparseMatrix *K0,*K1;
-			//double f1_max,f0_max,multi_k_du_max;
-			//forceModel->GetTangentStiffnessMatrixTopology(&K0);
-			//forceModel->GetTangentStiffnessMatrixTopology(&K1);
-			//double max_error=0.0;		
-			//for(unsigned int l=0;l<simulation_vertice_num;++l)
-			//{
-			//	Vec3d vert_pos=*volumetricMesh->getVertex(l);
-			//	if(vert_pos[0]>0)
-			//		u[3*l]=-0.1;
-			//	else
-			//		u[3*l]=0.1;
-			//	if(vert_pos[1]>0)
-			//		u[3*l+1]=0.1;
-			//	else
-			//		u[3*l+1]=-0.2;
-			//	if(vert_pos[2]>0)
-			//		u[3*l+2]=0.1;
-			//	else
-			//		u[3*l+2]=-0.3;
-			//}	
-			//double ran_numf=0.0;
-			//srand((unsigned)time(0));
-			//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-			//{
-			//	du[l]=(1.0e-5)*(rand()/(double)(RAND_MAX));
-			//	error_value[l]=0.0;
-			//}
-			//forceModel->GetForceAndMatrix(u,f0,K0);
-			//K0->MultiplyVector(du,multi_k_du);
-			//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-			//{
-			//	u1[l]=u[l]+du[l];
-			//}
-			//forceModel->GetForceAndMatrix(u1,f1,K1);
+			/*for(int i=0; i<stepsPerFrame; i++)
+			{*/
+				//count_num++;
+				//if((count_num<4)&&(count_num>1))
+				//{			
+				////test K
+				//double *u1,*du,*f1,*f0,*multi_k_du,*error_value;
+				//u1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+				//du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+				//f1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+				//f0=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+				//multi_k_du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+				//error_value=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+				//SparseMatrix *K0,*K1;
+				//double f1_max,f0_max,multi_k_du_max;
+				//forceModel->GetTangentStiffnessMatrixTopology(&K0);
+				//forceModel->GetTangentStiffnessMatrixTopology(&K1);
+				//double max_error=0.0;		
+				//for(unsigned int l=0;l<simulation_vertice_num;++l)
+				//{
+				//	Vec3d vert_pos=*volumetricMesh->getVertex(l);
+				//	if(vert_pos[0]>0)
+				//		u[3*l]=-0.1;
+				//	else
+				//		u[3*l]=0.1;
+				//	if(vert_pos[1]>0)
+				//		u[3*l+1]=0.1;
+				//	else
+				//		u[3*l+1]=-0.2;
+				//	if(vert_pos[2]>0)
+				//		u[3*l+2]=0.1;
+				//	else
+				//		u[3*l+2]=-0.3;
+				//}	
+				//double ran_numf=0.0;
+				//srand((unsigned)time(0));
+				//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
+				//{
+				//	du[l]=(1.0e-5)*(rand()/(double)(RAND_MAX));
+				//	error_value[l]=0.0;
+				//}
+				//forceModel->GetForceAndMatrix(u,f0,K0);
+				//K0->MultiplyVector(du,multi_k_du);
+				//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
+				//{
+				//	u1[l]=u[l]+du[l];
+				//}
+				//forceModel->GetForceAndMatrix(u1,f1,K1);
 
-			//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-			//{
-			//	error_value[l]=f1[l]-f0[l]-multi_k_du[l];
-			//}
+				//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
+				//{
+				//	error_value[l]=f1[l]-f0[l]-multi_k_du[l];
+				//}
 
-			//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-			//{
-			//	if(fabs(f1[l])>1.0e-8)
-			//	{
-			//		if(fabs(error_value[l]/f1[l])>max_error);
-			//		{
-			//			max_error=fabs(error_value[l]/f1[l]);
-			//			f1_max=f1[l];
-			//			f0_max=f0[l];
-			//			multi_k_du_max=multi_k_du[l];
-			//		}
-			//	}
-			//	else
-			//	{
-			//		std::cout<<"!";
-			//		//max_error=0.0;
-			//	}
-			//}
-			//	std::cout<<max_error<<"--f1="<<f1_max<<"--f0="<<f0_max<<"--multi_k_du_max="<<multi_k_du_max<<"----------------------------";
-			//	delete [] u1;
-			//	delete [] du;
-			//	delete [] f0;
-			//	delete [] f1;
-			//	delete [] multi_k_du;
-			//	delete [] error_value;
+				//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
+				//{
+				//	if(fabs(f1[l])>1.0e-8)
+				//	{
+				//		if(fabs(error_value[l]/f1[l])>max_error);
+				//		{
+				//			max_error=fabs(error_value[l]/f1[l]);
+				//			f1_max=f1[l];
+				//			f0_max=f0[l];
+				//			multi_k_du_max=multi_k_du[l];
+				//		}
+				//	}
+				//	else
+				//	{
+				//		std::cout<<"!";
+				//		//max_error=0.0;
+				//	}
+				//}
+				//	std::cout<<max_error<<"--f1="<<f1_max<<"--f0="<<f0_max<<"--multi_k_du_max="<<multi_k_du_max<<"----------------------------";
+				//	delete [] u1;
+				//	delete [] du;
+				//	delete [] f0;
+				//	delete [] f1;
+				//	delete [] multi_k_du;
+				//	delete [] error_value;
+				simulationFunction(test_case);
 				int code = integratorBase->DoTimestep();
-			printf("."); 
+				printf("."); 
+				//std::cout<<timeStepCounter<<",";
+				//}
 			//}
+			timeStepCounter++;
 		}
-		timestepCounter++;
+		
 		memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);
 	}
 	volumetricSurfaceMesh->SetVertexDeformations(u);	
@@ -1065,6 +1090,8 @@ void initSimulation()
 			exit(1);
 		}
 	}
+	else
+		velInitial = (double*) calloc (3*simulation_vertice_num, sizeof(double));
 	//test----------------
 	//int choose_vert[]={121,154,155,244,254,260,261,302,304,382,399,400,531,545,546,881,888,889,890,895,896,1002,1003,1004};
 	//velInitial=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
@@ -1103,6 +1130,12 @@ void initSimulation()
 			exit(1);
 		}
 	}
+
+	////load totalFrame
+	//if(strcmp(totalFrame,"__none")!=0)
+	//{
+
+	//}
 	// create force models, to be used by the integrator
 	printf("Creating force models...\n");
 	if (deformableObject == STVK)
@@ -1221,24 +1254,19 @@ void initSimulation()
 		printf("Error: failed to initialize numerical integrator.\n");
 		exit(1);
 	}
-	//
-	
 
 	/***************************************************************/
 	// set integration parameters
 	integratorBaseSparse->SetDampingMatrix(LaplacianDampingMatrix);
 	integratorBase->ResetToRest();
 	integratorBase->SetState(uInitial, velInitial);
-	integratorBase->SetTimestep(timeStep / substepsPerTimeStep);
+	integratorBase->SetTimestep(timeStep);
 	if (implicitNewmarkSparse != NULL)
 	{
 		implicitNewmarkSparse->UseStaticSolver(staticSolver);
 		if (velInitial != NULL)
 			implicitNewmarkSparse->SetState(implicitNewmarkSparse->Getq(), velInitial);
 	}
-	// clear fps buffer
-	for(int i=0; i<fpsBufferSize; i++)
-		fpsBuffer[i] = 0.0;
 	// load any external geometry file (e.g. some static scene for decoration; usually there will be none)
 	if (strcmp(extraSceneGeometryFilename,"__none") != 0)
 	{
@@ -1247,23 +1275,17 @@ void initSimulation()
 	}
 	else
 		extraSceneGeometry = NULL;
-	// set up the ground plane (for rendering)
-	/*renderGroundPlane = (strcmp(groundPlaneString, "__none") != 0);
-	if (renderGroundPlane)
+
+	 totalSteps=(int)(totalFrame*(1.0/(frame_rate*timeStep)));
+
+	if(output_mode==1)
 	{
-		double groundPlaneR, groundPlaneG, groundPlaneB;
-		double groundPlaneAmbient, groundPlaneDiffuse, groundPlaneSpecular, groundPlaneShininess;
-		sscanf(groundPlaneString,"%lf,%lf,%lf,r%lf,g%lf,b%lf,a%lf,d%lf,s%lf,sh%lf", &groundPlaneHeight, &groundPlaneLightHeight, &groundPlaneSize, &groundPlaneR, &groundPlaneG, &groundPlaneB, &groundPlaneAmbient, &groundPlaneDiffuse, &groundPlaneSpecular, &groundPlaneShininess);
-		displayListGround = glGenLists(1);
-		glNewList(displayListGround, GL_COMPILE);
-		RenderGroundPlane(groundPlaneHeight, groundPlaneR, groundPlaneG, groundPlaneB, groundPlaneAmbient, groundPlaneDiffuse, groundPlaneSpecular, groundPlaneShininess);
-		glEndList();
-	}*/
-	// set background color
-	int colorR, colorG, colorB;
-	sscanf(backgroundColorString, "%d %d %d", &colorR, &colorG, &colorB);
-	glClearColor(1.0 * colorR / 255, 1.0 * colorG / 255, 1.0 * colorB / 255, 0.0);
-	glui->sync_live();
+		// set background color
+		int colorR, colorG, colorB;
+		sscanf(backgroundColorString, "%d %d %d", &colorR, &colorG, &colorB);
+		glClearColor(1.0 * colorR / 255, 1.0 * colorG / 255, 1.0 * colorB / 255, 0.0);
+		glui->sync_live();
+	}	
 }
 
 // set up the configuration file
@@ -1306,8 +1328,9 @@ void initConfigurations()
 	configFile.addOptionOptional("g", &g, g);
 	configFile.addOptionOptional("useRealTimeNormals", &useRealTimeNormals, 0);
 
-	configFile.addOption("timestep", &timeStep);
-	configFile.addOptionOptional("substepsPerTimeStep", &substepsPerTimeStep, substepsPerTimeStep);
+	configFile.addOption("timeStep", &timeStep);
+	configFile.addOptionOptional("frame_rate", &frame_rate, frame_rate);	
+	configFile.addOptionOptional("totalFrame", &totalFrame, totalFrame);
 	configFile.addOptionOptional("syncTimestepWithGraphics", &syncTimestepWithGraphics, syncTimestepWithGraphics);
 	configFile.addOptionOptional("pauseSimulation", &pauseSimulation, pauseSimulation);
 	
@@ -1409,14 +1432,81 @@ int main(int argc, char* argv[])
 	{
 		printf("Error parsing options. Error at option %s.\n",argv[optup]);
 	}
+	
+	cout<<"Enter output mode:\n";
+	cout<<"1.glut_windows\n";
+	cout<<"2.output files\n";
+	cin>>output_mode;
+	test_case=0;
+	cout<<"Enter test case number:\n";
+	cout<<"1.bar twist\n";
+	cin>>test_case;
 	printf("Starting application.\n");
 	configFilename = string(configFilenameC);
 	printf("Loading scene configuration from %s.\n", configFilename.c_str());
 	initConfigurations(); // parse the config file
-	initGLUT(argc, argv, windowTitleBase , windowWidth, windowHeight, &windowID);
-	initGraphics(windowWidth, windowHeight); // more OpenGL initialization calls
-	initGLUI(); // init the UI
+	if(output_mode==1)
+	{
+		initGLUT(argc, argv, windowTitleBase , windowWidth, windowHeight, &windowID);
+		initGraphics(windowWidth, windowHeight); // more OpenGL initialization calls
+		initGLUI(); // init the UI
+	}	
 	initSimulation(); // init the simulation
-	glutMainLoop(); // you have reached the point of no return..
+	initFunction(test_case);
+	std::cout<<"1";
+	if(output_mode==2)
+	{
+		std::cout<<"2";
+		outputFilesLoop();
+	}
+	std::cout<<"3";
+	if(output_mode==1)
+	{
+		glutMainLoop(); // you have reached the point of no return..
+	}	
 	return 0;
+}
+void simulationFunction(int test_case_)
+{
+	if(test_case_==1)
+	{
+		//the top of the bar is fixed, the bottom rotate
+		Vec3d bottom_center(0,-2.55,0);
+		double fixed_height=2.1;
+		double bottom_total_rotate=720;
+		double omega_bottom=480.0;
+		double omega_bottom_angle=omega_bottom*2.0*PI/360.0;
+		double current_omega;
+		double min_height=2.55;
+		unsigned int step_count=(unsigned int)((bottom_total_rotate/omega_bottom)/timeStep);
+		//unsigned int step_count=frame_count*
+		if(timeStepCounter<step_count)
+		{
+			for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+			{
+				Vec3d vec_pos=*volumetricMesh->getVertex(i);
+				if(vec_pos[i]<min_height)
+					min_height=vec_pos[i];
+			}
+			std::cout<<"min_height="<<min_height<<"\n";
+			for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+			{
+				Vec3d vec_pos=*volumetricMesh->getVertex(i);
+				/*if(vec_pos[1]<-1.9)
+				{
+					velInitial[3*i]=omega*(vec_pos[2]-twist_center[2]);
+					velInitial[3*i+2]=(-1.0)*omega*(vec_pos[0]-twist_center[0]);
+				}*/
+				current_omega=(vec_pos[1]-fixed_height)/(min_height-fixed_height)*omega_bottom_angle;
+				velInitial[3*i]=current_omega*(vec_pos[2]-bottom_center[2]);
+				velInitial[3*i+2]=(-1.0)*current_omega*(vec_pos[0]-bottom_center[0]);
+			}
+			integratorBase->SetState(uInitial, velInitial);
+		}
+		
+	}
+}
+void initFunction(int test_case_)
+{
+	
 }

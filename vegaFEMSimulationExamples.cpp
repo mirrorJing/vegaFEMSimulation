@@ -63,7 +63,7 @@ int renderGroundPlane = 0;
 int renderFixedVertices = 1;
 int renderSprings = 0;
 int lockScene=0;
-int pauseSimulation=0;
+int pauseSimulation=1;
 Lighting * lighting = NULL;
 SceneObjectDeformable * volumetricSurfaceMesh = NULL;
 SceneObjectDeformable * renderingMesh = NULL;
@@ -133,6 +133,7 @@ int totalSteps=0;
 double frame_rate=1.0;
 int totalFrame = 0;
 double total_simulation_time=0.0;
+int simulation_frame_count=0;
 
 float newmarkBeta = 0.25;
 float newmarkGamma = 0.5;
@@ -183,16 +184,18 @@ double * uaccel = NULL;
 double * f_ext = NULL;
 double * f_col=NULL;//collision force
 double * f_extBase = NULL;
-double * uSecondary = NULL;
 double * uInitial = NULL;
 double * velInitial = NULL;
-
+int * fixedDOFs;
 // glui
 GLUI * glui;
 GLUI_Spinner * timeStep_spinner;
 GLUI_StaticText * systemSolveStaticText;
 GLUI_StaticText * forceAssemblyStaticText;
 
+//test_case_1:bar twist
+double * before_pos;
+double * after_pos;
 
 //function declaration
 void addGravitySwitch(bool addGravity);
@@ -201,7 +204,7 @@ void saveCurrentObjectSurface(int code);
 void changeSimulationMode(int code);
 void initFunction(int test_case_);
 void simulationFunction(int test_case_);
-
+void testStiffnessMatrix(void);
 //font is, for example, GLUT_BITMAP_9_BY_15
 void print_bitmap_string(float x, float y, float z, void * font, char * s)
 {
@@ -291,8 +294,16 @@ void displayFunction(void)
 				Vec3d vert_new_pos;
 				for(unsigned int j=0;j<3;++j)
 				{
-					vert_pos[j]=(*volumetricMesh->getVertex(i))[j]+integratorBase->Getq()[3*i+j];
-					vert_new_pos[j]=vert_pos[j]+integratorBase->Getqvel()[3*i+j];
+					if(timeStepCounter>=(simulation_frame_count/frame_rate)/timeStep)
+					{
+						vert_pos[j]=(*volumetricMesh->getVertex(i))[j]+integratorBase->Getq()[3*i+j];
+						vert_new_pos[j]=vert_pos[j]+integratorBase->Getqvel()[3*i+j];
+					}
+					else
+					{
+						vert_pos[j]=(*volumetricMesh->getVertex(i))[j]+u[3*i+j];
+						vert_new_pos[j]=vert_pos[j]+velInitial[3*i+j];
+					}
 				}
 				glColor3f(1.0,0.3,0);
 				glLineWidth(1);
@@ -377,7 +388,7 @@ void displayFunction(void)
 			VolumetricMesh::Set * elementSet=volumetricMesh->getSet(i);
 			std::set<int> elements;
 			elementSet->getElements(elements);
-			glColor3f((setNum-i*1.0)/setNum,i*1.0/setNum,0.0);
+			glColor3f(fabs(setNum-i*2.0)/setNum,(setNum-i*1.0)/setNum,i/setNum);
 			for(set<int>::iterator iter=elements.begin();iter!=elements.end();++iter)
 			{
 				for(int dim=0;dim<volumetricMesh->getNumElementVertices();++dim)
@@ -426,6 +437,7 @@ void outputFilesLoop(void)
 			}
 		}
 		integratorBaseSparse->SetExternalForces(f_ext);
+		simulationFunction(test_case);
 		int code = integratorBase->DoTimestep();
 		cout<<"timeStep "<<timeStepCounter<<" begins \n";
 		memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);	
@@ -534,109 +546,34 @@ void idleFunction(void)
 			{
 				f_ext[i]+=f_col[i];
 			}
-		}
-		
+		}		
 		// set forces to the integrator
 		integratorBaseSparse->SetExternalForces(f_ext);
-		//static int count_num=0;
-		//std::cout<<"aaaaaaaaaaaaa"<<totalSteps<<"\n";
-		//std::cout<<"timeStepCounter="<<timeStepCounter<<"\n";
 		if(timeStepCounter < totalSteps)
 		{
-			/*for(int i=0; i<stepsPerFrame; i++)
-			{*/
-				//count_num++;
-				//if((count_num<4)&&(count_num>1))
-				//{			
-				////test K
-				//double *u1,*du,*f1,*f0,*multi_k_du,*error_value;
-				//u1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-				//du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-				//f1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-				//f0=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-				//multi_k_du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-				//error_value=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-				//SparseMatrix *K0,*K1;
-				//double f1_max,f0_max,multi_k_du_max;
-				//forceModel->GetTangentStiffnessMatrixTopology(&K0);
-				//forceModel->GetTangentStiffnessMatrixTopology(&K1);
-				//double max_error=0.0;		
-				//for(unsigned int l=0;l<simulation_vertice_num;++l)
-				//{
-				//	Vec3d vert_pos=*volumetricMesh->getVertex(l);
-				//	if(vert_pos[0]>0)
-				//		u[3*l]=-0.1;
-				//	else
-				//		u[3*l]=0.1;
-				//	if(vert_pos[1]>0)
-				//		u[3*l+1]=0.1;
-				//	else
-				//		u[3*l+1]=-0.2;
-				//	if(vert_pos[2]>0)
-				//		u[3*l+2]=0.1;
-				//	else
-				//		u[3*l+2]=-0.3;
-				//}	
-				//double ran_numf=0.0;
-				//srand((unsigned)time(0));
-				//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-				//{
-				//	du[l]=(1.0e-5)*(rand()/(double)(RAND_MAX));
-				//	error_value[l]=0.0;
-				//}
-				//forceModel->GetForceAndMatrix(u,f0,K0);
-				//K0->MultiplyVector(du,multi_k_du);
-				//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-				//{
-				//	u1[l]=u[l]+du[l];
-				//}
-				//forceModel->GetForceAndMatrix(u1,f1,K1);
-
-				//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-				//{
-				//	error_value[l]=f1[l]-f0[l]-multi_k_du[l];
-				//}
-
-				//for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-				//{
-				//	if(fabs(f1[l])>1.0e-8)
-				//	{
-				//		if(fabs(error_value[l]/f1[l])>max_error);
-				//		{
-				//			max_error=fabs(error_value[l]/f1[l]);
-				//			f1_max=f1[l];
-				//			f0_max=f0[l];
-				//			multi_k_du_max=multi_k_du[l];
-				//		}
-				//	}
-				//	else
-				//	{
-				//		std::cout<<"!";
-				//		//max_error=0.0;
-				//	}
-				//}
-				//	std::cout<<max_error<<"--f1="<<f1_max<<"--f0="<<f0_max<<"--multi_k_du_max="<<multi_k_du_max<<"----------------------------";
-				//	delete [] u1;
-				//	delete [] du;
-				//	delete [] f0;
-				//	delete [] f1;
-				//	delete [] multi_k_du;
-				//	delete [] error_value;
-				simulationFunction(test_case);
+			//std::cout<<"timeStepCounter="<<timeStepCounter<<"--------------\n";
+			simulationFunction(test_case);
+			if(timeStepCounter>(simulation_frame_count/frame_rate)/timeStep)
+			{
 				int code = integratorBase->DoTimestep();
 				printf("."); 
-				//std::cout<<timeStepCounter<<",";
-				//}
-			//}
+			}
+			printf("!"); 
+
+			std::cout<<"vel-AFTER:"<<integratorBase->Getqvel()[0]<<"\n";
 			timeStepCounter++;
+		}		
+		if(timeStepCounter>=(simulation_frame_count/frame_rate)/timeStep)
+		{
+			memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);
+			//std::cout<<"u---"<<u[0]<<"\n";
+			//getchar();
 		}
-		
-		memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);
 	}
 	volumetricSurfaceMesh->SetVertexDeformations(u);	
 	VolumetricMesh::interpolate(u,uRenderSurface,objectRenderSurfaceMesh->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum,
 		objectRenderSurfaceMeshInterpolationVertices,objectRenderSurfaceMeshInterpolationWeights);
-	objectRenderSurfaceMesh->SetVertexDeformations(uRenderSurface);
+	objectRenderSurfaceMesh->SetVertexDeformations(uRenderSurface);	
 
 	//save object surface mesh to files
 	if((!lockScene)&&(!pauseSimulation)&&saveMeshToFile&&(timeStepCounter%timestepPerOutputFile==0))
@@ -1048,7 +985,7 @@ void initSimulation()
 	LoadList::print(numFixedVertices,fixedVertices);
 	// create 0-indexed fixed DOFs
 	int numFixedDOFs = 3 * numFixedVertices;
-	int * fixedDOFs = (int*) malloc (sizeof(int) * numFixedDOFs);
+	/*int **/ fixedDOFs = (int*) malloc (sizeof(int) * numFixedDOFs);
 	for(int i=0; i<numFixedVertices; i++)
 	{
 		fixedDOFs[3*i+0] = 3*fixedVertices[i]-3;
@@ -1065,7 +1002,11 @@ void initSimulation()
 	f_ext = (double*) calloc (3*simulation_vertice_num, sizeof(double));
 	f_extBase = (double*) calloc (3*simulation_vertice_num, sizeof(double));
 	f_col=(double*)calloc(3*simulation_vertice_num,sizeof(double));
-
+	if(test_case==1)
+	{
+		before_pos=(double*) calloc (3*simulation_vertice_num, sizeof(double));
+		after_pos=(double*) calloc (3*simulation_vertice_num, sizeof(double));
+	}
 	// load initial condition
 	if (strcmp(initialPositionFilename, "__none") != 0)
 	{
@@ -1079,6 +1020,7 @@ void initSimulation()
 	}
 	else
 		uInitial = (double*) calloc (3*simulation_vertice_num, sizeof(double));
+	
 	// load initial velocity
 	if (strcmp(initialVelocityFilename, "__none") != 0)
 	{
@@ -1092,6 +1034,8 @@ void initSimulation()
 	}
 	else
 		velInitial = (double*) calloc (3*simulation_vertice_num, sizeof(double));
+	for(unsigned int i=0;i<3*simulation_vertice_num;++i)
+		velInitial[i]=0.0;
 	//test----------------
 	//int choose_vert[]={121,154,155,244,254,260,261,302,304,382,399,400,531,545,546,881,888,889,890,895,896,1002,1003,1004};
 	//velInitial=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
@@ -1127,15 +1071,9 @@ void initSimulation()
 		else
 		{
 			printf("Error: need to load elastic tensor file name.\n");
-			exit(1);
+			//exit(1);
 		}
 	}
-
-	////load totalFrame
-	//if(strcmp(totalFrame,"__none")!=0)
-	//{
-
-	//}
 	// create force models, to be used by the integrator
 	printf("Creating force models...\n");
 	if (deformableObject == STVK)
@@ -1440,6 +1378,7 @@ int main(int argc, char* argv[])
 	test_case=0;
 	cout<<"Enter test case number:\n";
 	cout<<"1.bar twist\n";
+	cout<<"2.bar bend\n";
 	cin>>test_case;
 	printf("Starting application.\n");
 	configFilename = string(configFilenameC);
@@ -1453,13 +1392,10 @@ int main(int argc, char* argv[])
 	}	
 	initSimulation(); // init the simulation
 	initFunction(test_case);
-	std::cout<<"1";
 	if(output_mode==2)
 	{
-		std::cout<<"2";
 		outputFilesLoop();
 	}
-	std::cout<<"3";
 	if(output_mode==1)
 	{
 		glutMainLoop(); // you have reached the point of no return..
@@ -1472,41 +1408,181 @@ void simulationFunction(int test_case_)
 	{
 		//the top of the bar is fixed, the bottom rotate
 		Vec3d bottom_center(0,-2.55,0);
-		double fixed_height=2.1;
-		double bottom_total_rotate=720;
-		double omega_bottom=480.0;
-		double omega_bottom_angle=omega_bottom*2.0*PI/360.0;
-		double current_omega;
+		double fixed_height=2.158;
+		double bottom_total_rotate=160;
+		double bottom_angle=160;
+		double bottom_omega=bottom_angle*2.0*PI/360.0;
+		double current_omega_each_step=0.0,current_omega=0.0;
 		double min_height=2.55;
-		unsigned int step_count=(unsigned int)((bottom_total_rotate/omega_bottom)/timeStep);
-		//unsigned int step_count=frame_count*
+		simulation_frame_count=(unsigned int)((bottom_total_rotate/bottom_angle)*frame_rate);
+		int step_count=(simulation_frame_count/frame_rate)/timeStep;
+
+		for(unsigned int i=0;i<numFixedVertices;++i)
+		{
+
+		}
 		if(timeStepCounter<step_count)
 		{
 			for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
 			{
-				Vec3d vec_pos=*volumetricMesh->getVertex(i);
-				if(vec_pos[i]<min_height)
-					min_height=vec_pos[i];
-			}
-			std::cout<<"min_height="<<min_height<<"\n";
-			for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
-			{
-				Vec3d vec_pos=*volumetricMesh->getVertex(i);
-				/*if(vec_pos[1]<-1.9)
+				Vec3d vetex_pos=*volumetricMesh->getVertex(i);
+				if(vetex_pos[1]<min_height)
+					min_height=vetex_pos[1];
+				if(timeStepCounter==0)
 				{
-					velInitial[3*i]=omega*(vec_pos[2]-twist_center[2]);
-					velInitial[3*i+2]=(-1.0)*omega*(vec_pos[0]-twist_center[0]);
-				}*/
-				current_omega=(vec_pos[1]-fixed_height)/(min_height-fixed_height)*omega_bottom_angle;
-				velInitial[3*i]=current_omega*(vec_pos[2]-bottom_center[2]);
-				velInitial[3*i+2]=(-1.0)*current_omega*(vec_pos[0]-bottom_center[0]);
+					before_pos[3*i]=vetex_pos[0];
+					before_pos[3*i+1]=vetex_pos[1];
+					before_pos[3*i+2]=vetex_pos[2];
+					u[3*i]=0.0;
+					u[3*i+1]=0.0;
+					u[3*i+2]=0.0;
+					velInitial[3*i+0]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;
+				}
 			}
-			integratorBase->SetState(uInitial, velInitial);
+			//getchar();
+			for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+			{				
+				Vec3d vec_pos=*volumetricMesh->getVertex(i);
+				//current_omega_each_step=-bottom_omega*timeStep*(vec_pos[1]-fixed_height)/(min_height-fixed_height);
+				//temp
+				current_omega_each_step=-bottom_omega*(vec_pos[1]-fixed_height)/(min_height-fixed_height);
+				//
+			//	current_omega=bottom_omega*(vec_pos[1]-fixed_height)/(min_height-fixed_height);
+				//velInitial[3*i]=current_omega*(vec_pos[2]-bottom_center[2]);
+			//	velInitial[3*i+1]=0.0;
+			//	velInitial[3*i+2]=(-1.0)*current_omega*(vec_pos[0]-bottom_center[0]);
+				
+					after_pos[3*i]=bottom_center[0]+(before_pos[3*i]-bottom_center[0])*cos(current_omega_each_step)-(before_pos[3*i+2]-bottom_center[2])*sin(current_omega_each_step);
+					after_pos[3*i+1]=vec_pos[1];
+					after_pos[3*i+2]=bottom_center[2]+(before_pos[3*i]-bottom_center[0])*sin(current_omega_each_step)+(before_pos[3*i+2]-bottom_center[2])*cos(current_omega_each_step);
+					if(i==0)
+					{
+					//	std::cout<<"current_omega_each_step:"<<current_omega_each_step<<"\n";
+					//	std::cout<<"cos(current_omega_each_step):"<<cos(current_omega_each_step)<<"\n";
+					//	std::cout<<"before_pos[3*i]:"<<before_pos[3*i]<<"\n";
+					//	std::cout<<"after_pos[3*i]:"<<after_pos[3*i]<<"\n";
+					//	std::cout<<"before_pos[3*i+2]:"<<before_pos[3*i+2]<<"\n";
+					//	std::cout<<"bottom_center[2]:"<<bottom_center[2]<<"\n";
+					//	std::cout<<"(before_pos[3*i]-bottom_center[0]):"<<(before_pos[3*i]-bottom_center[0])<<"\n";
+					//	std::cout<<"sin(current_omega_each_step):"<<sin(current_omega_each_step)<<"\n";
+					//	std::cout<<"before_pos[3*i+2]-bottom_center[2]:"<<before_pos[3*i+2]-bottom_center[2]<<"\n";
+					//	std::cout<<"cos(current_omega_each_step):"<<cos(current_omega_each_step)<<"\n";
+					//	std::cout<<"after_pos[3*i+2]:"<<after_pos[3*i+2]<<"\n";					
+						//std::cout<<"vel:"<<velInitial[0]<<","<<velInitial[1]<<","<<velInitial[2]<<"\n";
+					}
+					u[3*i]=after_pos[3*i]-vec_pos[0];	
+					u[3*i+1]=0.0;
+					u[3*i+2]=after_pos[3*i+2]-vec_pos[2];
+					before_pos[3*i]=after_pos[3*i];
+					before_pos[3*i+2]=after_pos[3*i+2];		
+				//}
+			}
+			//temp
+			timeStepCounter=step_count;
+			//
+			for(unsigned int i=0;i<numFixedVertices;++i)
+			{
+				u[fixedDOFs[3*i+0]]=u[fixedDOFs[3*i+1]]=u[fixedDOFs[3*i+2]]=0.0;
+				//velInitial[fixedDOFs[3*i+0]]=velInitial[fixedDOFs[3*i+1]]=velInitial[fixedDOFs[3*i+2]]=0.0;
+			}
+			std::cout<<"vel-before:"<<integratorBase->Getqvel()[0]<<"\n";
+			integratorBase->SetState(u, velInitial);
+			std::cout<<"vel:"<<integratorBase->Getqvel()[0]<<"\n";
 		}
-		
+		//else if(timeStepCounter==step_count)
+		//{
+		//	for(unsigned int i=0;i<3*simulation_vertice_num;++i)
+		//	{
+		//		velInitial[3*i+0]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;
+		//	}					
+		//	integratorBase->SetState(u, velInitial);
+		//	//std::cout<<"u~~~~~~~~~~~~~~~~~"<<u[0]<<"\n";
+		//	getchar();
+		//}	
+	}
+	else if(test_case_==2)
+	{
+		//bar bending
 	}
 }
 void initFunction(int test_case_)
 {
 	
+}
+void testStiffnessMatrix(void)
+{
+	//test K
+	double *u1,*du,*f1,*f0,*multi_k_du,*error_value;
+	u1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+	du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+	f1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+	f0=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+	multi_k_du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+	error_value=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
+	SparseMatrix *K0,*K1;
+	double f1_max,f0_max,multi_k_du_max;
+	forceModel->GetTangentStiffnessMatrixTopology(&K0);
+	forceModel->GetTangentStiffnessMatrixTopology(&K1);
+	double max_error=0.0;		
+	for(unsigned int l=0;l<simulation_vertice_num;++l)
+	{
+		Vec3d vert_pos=*volumetricMesh->getVertex(l);
+		if(vert_pos[0]>0)
+			u[3*l]=-0.1;
+		else
+			u[3*l]=0.1;
+		if(vert_pos[1]>0)
+			u[3*l+1]=0.1;
+		else
+			u[3*l+1]=-0.2;
+		if(vert_pos[2]>0)
+			u[3*l+2]=0.1;
+		else
+			u[3*l+2]=-0.3;
+	}	
+	double ran_numf=0.0;
+	srand((unsigned)time(0));
+	for(unsigned int l=0;l<3*simulation_vertice_num;++l)
+	{
+		du[l]=(1.0e-5)*(rand()/(double)(RAND_MAX));
+		error_value[l]=0.0;
+	}
+	forceModel->GetForceAndMatrix(u,f0,K0);
+	K0->MultiplyVector(du,multi_k_du);
+	for(unsigned int l=0;l<3*simulation_vertice_num;++l)
+	{
+		u1[l]=u[l]+du[l];
+	}
+	forceModel->GetForceAndMatrix(u1,f1,K1);
+
+	for(unsigned int l=0;l<3*simulation_vertice_num;++l)
+	{
+		error_value[l]=f1[l]-f0[l]-multi_k_du[l];
+	}
+
+	for(unsigned int l=0;l<3*simulation_vertice_num;++l)
+	{
+		if(fabs(f1[l])>1.0e-8)
+		{
+			if(fabs(error_value[l]/f1[l])>max_error);
+			{
+				max_error=fabs(error_value[l]/f1[l]);
+				f1_max=f1[l];
+				f0_max=f0[l];
+				multi_k_du_max=multi_k_du[l];
+			}
+		}
+		else
+		{
+			std::cout<<"!";
+			//max_error=0.0;
+		}
+	}
+	std::cout<<max_error<<"--f1="<<f1_max<<"--f0="<<f0_max<<"--multi_k_du_max="<<multi_k_du_max<<"----------------------------";
+	delete [] u1;
+	delete [] du;
+	delete [] f0;
+	delete [] f1;
+	delete [] multi_k_du;
+	delete [] error_value;
 }

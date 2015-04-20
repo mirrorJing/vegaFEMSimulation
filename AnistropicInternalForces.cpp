@@ -102,7 +102,8 @@ void AnisotropicInternalForces::loadElasticTensorOnCoaseMesh(const string &elast
 				ele_elastic_tensor_vector_[ele_idx][row_idx][col_idx]=elastic_tensor_vector[ele_idx][num];
 			}				
 		}
-	}	
+	}
+	std::cout<<"------------------------------------------------";
 }
 Mat3d AnisotropicInternalForces::getInistialDisplacementMatrixOnEachElement(unsigned int ele_idx) const//Dm
 {
@@ -321,6 +322,7 @@ void AnisotropicInternalForces::ComputeForces(const double * vertexDisplacements
 		}
 	free(vert_global_idx);
 	}
+	//std::cout<<"f[3591]="<<forces[3591]<<","<<forces[3592]<<","<<forces[3593]<<"\n";
 	if (add_gravity_)
 	{
 		for(int i=0; i<3*vert_num_; i++)
@@ -328,4 +330,5 @@ void AnisotropicInternalForces::ComputeForces(const double * vertexDisplacements
 			forces[i] -= gravity_force_[i];			
 		}
 	}
+	//std::cout<<"f+g[3591]="<<forces[3591]<<","<<forces[3592]<<","<<forces[3593]<<"\n";
 }

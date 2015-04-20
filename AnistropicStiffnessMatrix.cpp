@@ -339,14 +339,13 @@ double * AnisotropicStiffnessMatrix::getGreenStrainTensor(const Mat3d F) const
 	return result_vector;
 }
 
-double * AnisotropicStiffnessMatrix::getGreenStrainTensorDerivative(unsigned int ele_idx,unsigned int vert_idx,unsigned int vert_idx_dim,const Mat3d F) const
+double * AnisotropicStiffnessMatrix::getCauchyStrainTensorDerivative(unsigned int ele_idx,unsigned int vert_idx,unsigned int vert_idx_dim,const Mat3d F) const
 {
 	double * result_vector;
 	result_vector=(double*)malloc(sizeof(double)*6);
 	const Mat3d F_derivative=getDeformationGradientDerivative(ele_idx,vert_idx,vert_idx_dim);
 	Mat3d result_matrix(1.0,0,0,0,1.0,0,0,0,1.0);
-	result_matrix=0.5*trans(F_derivative)*F;
-	result_matrix+=0.5*trans(F)*F_derivative;
+	result_matrix=0.5*(trans(F_derivative)+F_derivative);
 	for(unsigned int i=0;i<3;++i)
 	{
 		result_vector[i]=result_matrix[i][i];
@@ -359,13 +358,14 @@ double * AnisotropicStiffnessMatrix::getGreenStrainTensorDerivative(unsigned int
 			result_vector[i]=0;
 	return result_vector;
 }
-double * AnisotropicStiffnessMatrix::getCauchyStrainTensorDerivative(unsigned int ele_idx,unsigned int vert_idx,unsigned int vert_idx_dim,const Mat3d F) const
+double * AnisotropicStiffnessMatrix::getGreenStrainTensorDerivative(unsigned int ele_idx,unsigned int vert_idx,unsigned int vert_idx_dim,const Mat3d F) const
 {
 	double * result_vector;
 	result_vector=(double*)malloc(sizeof(double)*6);
 	const Mat3d F_derivative=getDeformationGradientDerivative(ele_idx,vert_idx,vert_idx_dim);
 	Mat3d result_matrix(1.0,0,0,0,1.0,0,0,0,1.0);
-	result_matrix=0.5*(trans(F_derivative)+F_derivative);
+	result_matrix=0.5*trans(F_derivative)*F;
+	result_matrix+=0.5*trans(F)*F_derivative;
 	for(unsigned int i=0;i<3;++i)
 	{
 		result_vector[i]=result_matrix[i][i];

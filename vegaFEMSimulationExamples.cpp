@@ -1330,7 +1330,7 @@ int main(int argc, char* argv[])
 	test_case=0;
 	cout<<"Enter test case number:\n";
 	cout<<"1.bar twist\n";
-	cout<<"2.bar bend\n";
+	cout<<"2.bar fall off on the slope\n";
 	cin>>test_case;
 	printf("Starting application.\n");
 	configFilename = string(configFilenameC);
@@ -1401,11 +1401,15 @@ void initFunction(int test_case_)
 			u[3*i+2]=initial_pos[3*i+2]-vec_pos[2];			
 		}
 		//set the displacement of the fixed vertices
-		for(unsigned int i=0;i<numFixedVertices;++i)
+		/*for(unsigned int i=0;i<numFixedVertices;++i)
 		{
 			u[fixedDOFs[3*i+0]]=u[fixedDOFs[3*i+1]]=u[fixedDOFs[3*i+2]]=0.0;
-		}
+		}*/
 		integratorBase->SetState(u, velInitial);
+	}
+	else if(test_case==2)
+	{//bar dropped on the slope and rolled to the floor
+		
 	}
 	else if(test_case==3)
 	{

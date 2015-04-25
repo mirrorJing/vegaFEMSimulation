@@ -1329,8 +1329,9 @@ int main(int argc, char* argv[])
 	cin>>output_mode;
 	test_case=0;
 	cout<<"Enter test case number:\n";
-	cout<<"1.bar twist\n";
-	cout<<"2.bar fall off on the slope\n";
+	cout<<"0.gravity\n";
+	cout<<"1.twist\n";
+	cout<<"2.fall off on the slope\n";
 	cin>>test_case;
 	printf("Starting application.\n");
 	configFilename = string(configFilenameC);

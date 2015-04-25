@@ -163,6 +163,7 @@ StVKForceModel * stVKForceModel = NULL;
 AnisotropicInternalForces * anisotropicInternalForces = NULL;
 AnisotropicStiffnessMatrix * anisotropicStiffnessMatrix = NULL;
 AnisotropicForceModel * anisotropicForceModel = NULL;
+CorotationalAnisotropicFEMForceModel * corotationalAnisotropicFEMForceModel = NULL;
 CorotationalLinearFEMForceModel * corotationalLinearFEMForceModel = NULL;
 bool addGravity=false;
 double g=0;
@@ -170,7 +171,7 @@ unsigned int output_mode=1;
 VolumetricMesh * volumetricMesh = NULL;
 TetMesh * tetMesh = NULL;
 Graph * meshGraph = NULL;
-enum deformableObjectType { STVK, COROTLINFEM, LINFEM, INVERTIBLEFEM, ANISOTROPIC, UNSPECIFIED} deformableObject = UNSPECIFIED;
+enum deformableObjectType { STVK, COROTLINFEM, LINFEM, INVERTIBLEFEM, ANISOTROPIC, COROTANISTROPIC,UNSPECIFIED} deformableObject = UNSPECIFIED;
 enum invertibleMaterialType { INV_STVK, INV_NEOHOOKEAN, INV_MOONEYRIVLIN, INV_NONE } invertibleMaterial = INV_NONE;
 enum solverType { IMPLICITNEWMARK, IMPLICITBACKWARDEULER, EULER, SYMPLECTICEULER, CENTRALDIFFERENCES, UNKNOWN } solver = UNKNOWN;
 
@@ -194,8 +195,7 @@ GLUI_StaticText * systemSolveStaticText;
 GLUI_StaticText * forceAssemblyStaticText;
 
 //test_case_1:bar twist
-double * before_pos;
-double * after_pos;
+double * initial_pos;
 
 //function declaration
 void addGravitySwitch(bool addGravity);
@@ -551,25 +551,15 @@ void idleFunction(void)
 		integratorBaseSparse->SetExternalForces(f_ext);
 		if(timeStepCounter < totalSteps)
 		{
-			//std::cout<<"timeStepCounter="<<timeStepCounter<<"--------------\n";
-			simulationFunction(test_case);
-			if(timeStepCounter>(simulation_frame_count/frame_rate)/timeStep)
-			{
-				int code = integratorBase->DoTimestep();
-				printf("."); 
-			}
-			printf("!"); 
-
-			std::cout<<"vel-AFTER:"<<integratorBase->Getqvel()[0]<<"\n";
+			//simulationFunction(test_case);
+			int code = integratorBase->DoTimestep();
+			printf("."); 
 			timeStepCounter++;
-		}		
-		if(timeStepCounter>=(simulation_frame_count/frame_rate)/timeStep)
-		{
-			memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);
-			//std::cout<<"u---"<<u[0]<<"\n";
-			//getchar();
 		}
+		//std::cout<<"V1="<<integratorBase->Getqvel()[1]<<"--------------\n";
+		//std::cout<<"U1="<<u[1]<<"--------------\n";
 	}
+	memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);
 	volumetricSurfaceMesh->SetVertexDeformations(u);	
 	VolumetricMesh::interpolate(u,uRenderSurface,objectRenderSurfaceMesh->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum,
 		objectRenderSurfaceMeshInterpolationVertices,objectRenderSurfaceMeshInterpolationWeights);
@@ -838,6 +828,8 @@ void initSimulation()
 			deformableObject = STVK;
 		if (strcmp(deformableObjectMethod, "Anisotropic") == 0)
 			deformableObject = ANISOTROPIC;
+		if (strcmp(deformableObjectMethod, "CLAnistropic") ==0)
+			deformableObject = COROTANISTROPIC;
 		if (strcmp(deformableObjectMethod, "CLFEM") == 0)
 			deformableObject = COROTLINFEM;
 		if (strcmp(deformableObjectMethod, "LinearFEM") == 0)
@@ -852,7 +844,7 @@ void initSimulation()
 		exit(1);
 	}
 	// load mesh
-	if ((deformableObject == STVK) || (deformableObject == ANISOTROPIC) || (deformableObject == COROTLINFEM) || (deformableObject == LINFEM) || (deformableObject == INVERTIBLEFEM))
+	if ((deformableObject == STVK) || (deformableObject == ANISOTROPIC) || (deformableObject == COROTLINFEM) || (deformableObject == COROTANISTROPIC) || (deformableObject == INVERTIBLEFEM))
 	{
 		printf("Loading volumetric mesh from file %s...\n", volumetricSurfaceMeshFilename);
 		volumetricMesh = VolumetricMeshLoader::load(volumetricSurfaceMeshFilename);
@@ -911,7 +903,18 @@ void initSimulation()
 			{
 				anisotropicInternalForces = new AnisotropicInternalForces(volumetricMesh, addGravity, g);
 				anisotropicStiffnessMatrix = new AnisotropicStiffnessMatrix(anisotropicInternalForces);
-			}			
+			}	
+			//load elastic tensor
+			if(strcmp(elasticTensorFilename, "__none")!=0)
+			{
+				anisotropicInternalForces->loadElasticTensorOnCoaseMesh(elasticTensorFilename);
+				anisotropicStiffnessMatrix->loadElasticTensorOnCoaseMesh(elasticTensorFilename);
+			}
+			else
+			{
+				cout<<"Error: need to load elastic tensor file name.\n";
+				exit(1);
+			}
 		}
 	}
 	else
@@ -920,7 +923,6 @@ void initSimulation()
 		exit(1);
 	}
 	//convert different material elements of volumetric mesh to volumetric_surface_mesh
-	//int * volumetricMaterial
 	int scaleRows = 1;
 	meshGraph->GetLaplacian(&LaplacianDampingMatrix, scaleRows);
 	LaplacianDampingMatrix->ScalarMultiply(dampingLaplacianCoef);
@@ -997,15 +999,12 @@ void initSimulation()
 	printf("Boundary vertices processed.\n");
 	// make room for deformation and force vectors
 	u = (double*) calloc (3*simulation_vertice_num, sizeof(double));
-	uvel = (double*) calloc (3*simulation_vertice_num, sizeof(double));
-	uaccel = (double*) calloc (3*simulation_vertice_num, sizeof(double));
 	f_ext = (double*) calloc (3*simulation_vertice_num, sizeof(double));
 	f_extBase = (double*) calloc (3*simulation_vertice_num, sizeof(double));
 	f_col=(double*)calloc(3*simulation_vertice_num,sizeof(double));
 	if(test_case==1)
 	{
-		before_pos=(double*) calloc (3*simulation_vertice_num, sizeof(double));
-		after_pos=(double*) calloc (3*simulation_vertice_num, sizeof(double));
+		initial_pos=(double*) calloc (3*simulation_vertice_num, sizeof(double));
 	}
 	// load initial condition
 	if (strcmp(initialPositionFilename, "__none") != 0)
@@ -1036,19 +1035,6 @@ void initSimulation()
 		velInitial = (double*) calloc (3*simulation_vertice_num, sizeof(double));
 	for(unsigned int i=0;i<3*simulation_vertice_num;++i)
 		velInitial[i]=0.0;
-	//test----------------
-	//int choose_vert[]={121,154,155,244,254,260,261,302,304,382,399,400,531,545,546,881,888,889,890,895,896,1002,1003,1004};
-	//velInitial=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-	////for(unsigned int i=0;i<3*simulation_vertice_num;++i)
-	////{
-	////	velInitial[i]=0.0;
-	////}
-	//for(unsigned int i=0;i<24;++i)
-	//{
-	//	//std::cout<<choose_vert[i]<<"\n";
-	//	int choose_vert_num=3*choose_vert[i]+1;
-	//	velInitial[choose_vert_num]=-20.0;
-	//}
 	// load force loads
 	if (strcmp(forceLoadsFilename, "__none") != 0)
 	{
@@ -1058,20 +1044,6 @@ void initSimulation()
 		{
 			printf("Mismatch in the dimension of the force load matrix.\n");
 			exit(1);
-		}
-	}
-	//load elastic tensor files
-	if(deformableObject == ANISOTROPIC)
-	{
-		if(strcmp(elasticTensorFilename, "__none")!=0)
-		{
-			anisotropicInternalForces->loadElasticTensorOnCoaseMesh(elasticTensorFilename);
-			anisotropicStiffnessMatrix->loadElasticTensorOnCoaseMesh(elasticTensorFilename);
-		}
-		else
-		{
-			printf("Error: need to load elastic tensor file name.\n");
-			//exit(1);
 		}
 	}
 	// create force models, to be used by the integrator
@@ -1087,6 +1059,31 @@ void initSimulation()
 		anisotropicForceModel = new AnisotropicForceModel(anisotropicInternalForces, anisotropicStiffnessMatrix);
 		forceModel = anisotropicForceModel;
 		anisotropicForceModel->GetInternalForce(uInitial,u);
+
+	}
+	if (deformableObject == COROTANISTROPIC)
+	{
+		TetMesh *tetMesh = dynamic_cast<TetMesh*>(volumetricMesh);
+		if(tetMesh == NULL)
+		{
+			cout<<"Error: the input mesh is not a tet mesh(Corotational Anisotropic deformable model).\n";
+			exit(1);
+		}
+		CorotationalAnisotropicFEM * corotationalAnisotropicFEM;
+		corotationalAnisotropicFEM = new CorotationalAnisotropicFEM(tetMesh, addGravity, g);
+		corotationalAnisotropicFEMForceModel = new CorotationalAnisotropicFEMForceModel(corotationalAnisotropicFEM);
+		//load elastic tensor
+		if(strcmp(elasticTensorFilename, "__none")!=0)
+		{
+			corotationalAnisotropicFEM->loadElasticTensorOnCoaseMesh(elasticTensorFilename);
+		}
+		else
+		{
+			cout<<"Error: need to load elastic tensor file name.\n";
+			exit(1);
+		}
+		forceModel = corotationalAnisotropicFEMForceModel;
+		
 	}
 	if (deformableObject == COROTLINFEM)
 	{
@@ -1110,51 +1107,6 @@ void initSimulation()
 	{
 		LinearFEMForceModel * linearFEMForceModel = new LinearFEMForceModel(stVKInternalForces);
 		forceModel = linearFEMForceModel;
-	}
-	if (deformableObject == INVERTIBLEFEM)
-	{
-		TetMesh * tetMesh = dynamic_cast<TetMesh*>(volumetricMesh);
-		if (tetMesh == NULL)
-		{
-			printf("Error: the input mesh is not a tet mesh (Invertible FEM deformable model).\n");
-			exit(1);
-		}
-		IsotropicMaterial * isotropicMaterial = NULL;
-		// create the invertible material model
-		if (strcmp(invertibleMaterialString, "StVK") == 0)
-			invertibleMaterial = INV_STVK;
-		if (strcmp(invertibleMaterialString, "neoHookean") == 0)
-			invertibleMaterial = INV_NEOHOOKEAN;
-		if (strcmp(invertibleMaterialString, "MooneyRivlin") == 0)
-			invertibleMaterial = INV_MOONEYRIVLIN;
-		switch (invertibleMaterial)
-		{
-			case INV_STVK:
-				isotropicMaterial = new StVKIsotropicMaterial(tetMesh);
-				printf("Invertible material: StVK.\n");
-				break;
-			case INV_NEOHOOKEAN:
-				isotropicMaterial = new NeoHookeanIsotropicMaterial(tetMesh);
-				printf("Invertible material: neo-Hookean.\n");
-				break;
-			case INV_MOONEYRIVLIN:
-				isotropicMaterial = new MooneyRivlinIsotropicMaterial(tetMesh);
-				printf("Invertible material: Mooney-Rivlin.\n");
-				break;
-			default:
-				printf("Error: invalid invertible material type.\n");
-				exit(1);
-				break;
-		}
-		// create the invertible FEM deformable model
-		IsotropicHyperelasticFEM * isotropicHyperelasticFEM;
-		if (numInternalForceThreads == 0)
-			isotropicHyperelasticFEM = new IsotropicHyperelasticFEM(tetMesh, isotropicMaterial, principalStretchThreshold, addGravity, g);
-		else
-			isotropicHyperelasticFEM = new IsotropicHyperelasticFEMMT(tetMesh, isotropicMaterial, principalStretchThreshold, addGravity, g, numInternalForceThreads);
-		// create force model for the invertible FEM class
-		IsotropicHyperelasticFEMForceModel * isotropicHyperelasticFEMForceModel = new IsotropicHyperelasticFEMForceModel(isotropicHyperelasticFEM);
-		forceModel = isotropicHyperelasticFEMForceModel;
 	}
 	// initialize the integrator
 	printf("Initializing the integrator, n = %d...\n", simulation_vertice_num);
@@ -1404,110 +1356,79 @@ int main(int argc, char* argv[])
 }
 void simulationFunction(int test_case_)
 {
+}
+void initFunction(int test_case_)
+{
 	if(test_case_==1)
 	{
 		//the top of the bar is fixed, the bottom rotate
 		Vec3d bottom_center(0,-2.55,0);
-		double fixed_height=2.158;
-		double bottom_total_rotate=160;
-		double bottom_angle=160;
-		double bottom_omega=bottom_angle*2.0*PI/360.0;
-		double current_omega_each_step=0.0,current_omega=0.0;
-		double min_height=2.55;
-		simulation_frame_count=(unsigned int)((bottom_total_rotate/bottom_angle)*frame_rate);
-		int step_count=(simulation_frame_count/frame_rate)/timeStep;
+		double fixed_min_height=2.55;
+		double bottom_angle=120;
+		double bottom_radian=bottom_angle*2.0*PI/360.0;
+		double current_radian=0.0;
+		double bottom_min_height=2.55;
+		double shrink_bottom_height=1;
+		//find the minimal fixed height position along y direction
+		for(unsigned int i=0;i<numFixedVertices*3;)
+		{
+			Vec3d vertex_pos=*volumetricMesh->getVertex(fixedDOFs[i]/3);
+			if(vertex_pos[1]<fixed_min_height)
+				fixed_min_height=vertex_pos[1];
+			i=i+3;
+		}
+		//find the minimal position along y direction
+		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+		{
+			Vec3d vetex_pos=*volumetricMesh->getVertex(i);
+			if(vetex_pos[1]<bottom_min_height)
+				bottom_min_height=vetex_pos[1];
+			//set initial velocity of each vertex
+			velInitial[3*i+0]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;
+		}
+		//set initial twist bar position
+		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+		{				
+			Vec3d vec_pos=*volumetricMesh->getVertex(i);
+			//get the twist radian for each vertex
+			current_radian=-bottom_radian*(vec_pos[1]-fixed_min_height)/(bottom_min_height-fixed_min_height);				
+			initial_pos[3*i]=bottom_center[0]+(vec_pos[0]-bottom_center[0])*cos(current_radian)-(vec_pos[2]-bottom_center[2])*sin(current_radian);
+			initial_pos[3*i+1]=vec_pos[1]/*+shrink_bottom_height*(vec_pos[1]-fixed_min_height)/(bottom_min_height-fixed_min_height)*/;
+			initial_pos[3*i+2]=bottom_center[2]+(vec_pos[0]-bottom_center[0])*sin(current_radian)+(vec_pos[2]-bottom_center[2])*cos(current_radian);
 
+			u[3*i]=initial_pos[3*i]-vec_pos[0];	
+			u[3*i+1]=initial_pos[3*i+1]-vec_pos[1];
+			u[3*i+2]=initial_pos[3*i+2]-vec_pos[2];			
+		}
+		//set the displacement of the fixed vertices
 		for(unsigned int i=0;i<numFixedVertices;++i)
 		{
-
+			u[fixedDOFs[3*i+0]]=u[fixedDOFs[3*i+1]]=u[fixedDOFs[3*i+2]]=0.0;
 		}
-		if(timeStepCounter<step_count)
-		{
-			for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
-			{
-				Vec3d vetex_pos=*volumetricMesh->getVertex(i);
-				if(vetex_pos[1]<min_height)
-					min_height=vetex_pos[1];
-				if(timeStepCounter==0)
-				{
-					before_pos[3*i]=vetex_pos[0];
-					before_pos[3*i+1]=vetex_pos[1];
-					before_pos[3*i+2]=vetex_pos[2];
-					u[3*i]=0.0;
-					u[3*i+1]=0.0;
-					u[3*i+2]=0.0;
-					velInitial[3*i+0]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;
-				}
-			}
-			//getchar();
-			for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
-			{				
-				Vec3d vec_pos=*volumetricMesh->getVertex(i);
-				//current_omega_each_step=-bottom_omega*timeStep*(vec_pos[1]-fixed_height)/(min_height-fixed_height);
-				//temp
-				current_omega_each_step=-bottom_omega*(vec_pos[1]-fixed_height)/(min_height-fixed_height);
-				//
-			//	current_omega=bottom_omega*(vec_pos[1]-fixed_height)/(min_height-fixed_height);
-				//velInitial[3*i]=current_omega*(vec_pos[2]-bottom_center[2]);
-			//	velInitial[3*i+1]=0.0;
-			//	velInitial[3*i+2]=(-1.0)*current_omega*(vec_pos[0]-bottom_center[0]);
-				
-					after_pos[3*i]=bottom_center[0]+(before_pos[3*i]-bottom_center[0])*cos(current_omega_each_step)-(before_pos[3*i+2]-bottom_center[2])*sin(current_omega_each_step);
-					after_pos[3*i+1]=vec_pos[1];
-					after_pos[3*i+2]=bottom_center[2]+(before_pos[3*i]-bottom_center[0])*sin(current_omega_each_step)+(before_pos[3*i+2]-bottom_center[2])*cos(current_omega_each_step);
-					if(i==0)
-					{
-					//	std::cout<<"current_omega_each_step:"<<current_omega_each_step<<"\n";
-					//	std::cout<<"cos(current_omega_each_step):"<<cos(current_omega_each_step)<<"\n";
-					//	std::cout<<"before_pos[3*i]:"<<before_pos[3*i]<<"\n";
-					//	std::cout<<"after_pos[3*i]:"<<after_pos[3*i]<<"\n";
-					//	std::cout<<"before_pos[3*i+2]:"<<before_pos[3*i+2]<<"\n";
-					//	std::cout<<"bottom_center[2]:"<<bottom_center[2]<<"\n";
-					//	std::cout<<"(before_pos[3*i]-bottom_center[0]):"<<(before_pos[3*i]-bottom_center[0])<<"\n";
-					//	std::cout<<"sin(current_omega_each_step):"<<sin(current_omega_each_step)<<"\n";
-					//	std::cout<<"before_pos[3*i+2]-bottom_center[2]:"<<before_pos[3*i+2]-bottom_center[2]<<"\n";
-					//	std::cout<<"cos(current_omega_each_step):"<<cos(current_omega_each_step)<<"\n";
-					//	std::cout<<"after_pos[3*i+2]:"<<after_pos[3*i+2]<<"\n";					
-						//std::cout<<"vel:"<<velInitial[0]<<","<<velInitial[1]<<","<<velInitial[2]<<"\n";
-					}
-					u[3*i]=after_pos[3*i]-vec_pos[0];	
-					u[3*i+1]=0.0;
-					u[3*i+2]=after_pos[3*i+2]-vec_pos[2];
-					before_pos[3*i]=after_pos[3*i];
-					before_pos[3*i+2]=after_pos[3*i+2];		
-				//}
-			}
-			//temp
-			timeStepCounter=step_count;
-			//
-			for(unsigned int i=0;i<numFixedVertices;++i)
-			{
-				u[fixedDOFs[3*i+0]]=u[fixedDOFs[3*i+1]]=u[fixedDOFs[3*i+2]]=0.0;
-				//velInitial[fixedDOFs[3*i+0]]=velInitial[fixedDOFs[3*i+1]]=velInitial[fixedDOFs[3*i+2]]=0.0;
-			}
-			std::cout<<"vel-before:"<<integratorBase->Getqvel()[0]<<"\n";
-			integratorBase->SetState(u, velInitial);
-			std::cout<<"vel:"<<integratorBase->Getqvel()[0]<<"\n";
-		}
-		//else if(timeStepCounter==step_count)
-		//{
-		//	for(unsigned int i=0;i<3*simulation_vertice_num;++i)
-		//	{
-		//		velInitial[3*i+0]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;
-		//	}					
-		//	integratorBase->SetState(u, velInitial);
-		//	//std::cout<<"u~~~~~~~~~~~~~~~~~"<<u[0]<<"\n";
-		//	getchar();
-		//}	
+		integratorBase->SetState(u, velInitial);
 	}
-	else if(test_case_==2)
+	else if(test_case==3)
 	{
-		//bar bending
+		Vec3d rotate_center(-1.25,-0.5,-0.5);
+		//Vec3d rotate_center(0,-0.5,0);
+		double rotate_omega=-60*2*PI/360.0;
+		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+		{
+			//
+			/*Vec3d vect_pos=*volumetricMesh->getVertex(i);
+			u[3*i]=(vect_pos[0]-rotate_center[0])*cos(rotate_omega)-(vect_pos[1]-rotate_center[1])*sin(rotate_omega)-vect_pos[0];
+			u[3*i+1]=(vect_pos[0]-rotate_center[0])*sin(rotate_omega)+(vect_pos[1]-rotate_center[1])*cos(rotate_omega)-vect_pos[1];
+			u[3*i+2]=0.0;
+			velInitial[3*i]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;*/
+			//totate
+			Vec3d vect_pos=*volumetricMesh->getVertex(i);
+			velInitial[3*i+1]=rotate_omega*(vect_pos[2]-rotate_center[2]);
+			velInitial[3*i+2]=(-1.0)*rotate_omega*(vect_pos[1]-rotate_center[1]);
+			velInitial[3*i]=0.0;			
+			u[3*i]=u[3*i+1]=u[3*i+2]=0.0;
+		}
+		integratorBase->SetState(u,velInitial);
 	}
-}
-void initFunction(int test_case_)
-{
-	
 }
 void testStiffnessMatrix(void)
 {

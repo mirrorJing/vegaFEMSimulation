@@ -27,6 +27,7 @@ AnisotropicForceModel::~AnisotropicForceModel()
 void AnisotropicForceModel::GetInternalForce(double * u, double * internalForces)
 {
 	anisotropic_internal_forces_->ComputeForces(u, internalForces);
+
 }
 
 void AnisotropicForceModel::GetTangentStiffnessMatrixTopology(SparseMatrix ** tangentStiffnessMatrix)

@@ -61,9 +61,9 @@ protected:
 	int vert_num_;
 	int ele_num_;
 	int ele_vert_num_;
-	double * gravity_force_;
 	TetMesh * tet_mesh_;
 	bool add_gravity_;
+	double * gravity_force_;
 	double g_;
 };
 

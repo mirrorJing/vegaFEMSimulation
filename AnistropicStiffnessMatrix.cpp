@@ -202,8 +202,18 @@ vector<Mat3d> AnisotropicStiffnessMatrix::getCurrentDisplacementMatrixOnAllEleme
 			for(unsigned int i=0;i<3;++i)
 			{
 				vert_pos[idx][i]=vert_displacement[3*vert_idx[idx]+i]+origin_vert_pos[idx][i];
+
+				/*if(ele_idx==0)
+				{*/
+
+					//std::cout<<"vert_pos------:"<<vert_pos[idx][i]<<",";
+				//}
 			}
 		}
+		/*if(ele_idx==0)
+		{
+		std::cout<<"\n";
+		}*/
 		for(unsigned int dim = 0; dim < 3; ++dim)
 		{
 			result_vec[dim][0]=vert_pos[0][dim]-vert_pos[3][dim];
@@ -212,6 +222,11 @@ vector<Mat3d> AnisotropicStiffnessMatrix::getCurrentDisplacementMatrixOnAllEleme
 		}
 		Mat3d result_matrix(result_vec[0],result_vec[1],result_vec[2]);
 		result_matrix_vector[ele_idx]=result_matrix;
+		/*if(ele_idx==0)
+		{
+
+			std::cout<<"current_dis_m:"<<result_matrix<<"\n";
+		}*/
 		delete [] vert_idx;
 		delete [] vert_pos;
 		delete [] origin_vert_pos;
@@ -418,6 +433,7 @@ Mat3d AnisotropicStiffnessMatrix::firstPiolaKirchhoffStressDerivative(unsigned i
 		strain_tensor_derivative_vector=getCauchyStrainTensorDerivative(ele_idx,vert_idx,vert_idx_dim,F);
 	else if(strain_type==GREEN_STRAIN)
 		strain_tensor_derivative_vector=getGreenStrainTensorDerivative(ele_idx,vert_idx,vert_idx_dim,F);
+		//strain_tensor_derivative_vector=getCauchyStrainTensorDerivative(ele_idx,vert_idx,vert_idx_dim,F);
 	//convert to 3*3 matrix
 	for(unsigned int i=0;i<6;++i)
 	{
@@ -463,6 +479,8 @@ void AnisotropicStiffnessMatrix::ComputeStiffnessMatrix(double * vertexDisplacem
 		double ele_volume=tet_mesh_->getTetVolume(tet_mesh_->getVertex(ele_idx,0),tet_mesh_->getVertex(ele_idx,1),tet_mesh_->getVertex(ele_idx,2),tet_mesh_->getVertex(ele_idx,3));
 		Mat3d init_dis_matrix=getInistialDisplacementMatrixOnEachElement(ele_idx);
 		Mat3d F=getDeformationGradient(init_dis_matrix,current_dis_matrix[ele_idx]);
+	//	std::cout<<"F:"<<F<<"\n";
+	//	std::cout<<"current_dis_matrix:"<<current_dis_matrix[ele_idx]<<"\n";
 //		//----dH/dx_j^k=d[f_0 f_1 f_2]/dx_j^k		
 		for(unsigned int j=0;j<ele_vert_num_;++j)
 		{
@@ -491,6 +509,14 @@ void AnisotropicStiffnessMatrix::ComputeStiffnessMatrix(double * vertexDisplacem
 				//assemble the 3*3 matrix of df_i/dx_j
 				AddMatrix3x3Block(i, j, ele_idx, f_derivative_matrix[i], sparseMatrix);
 			}
+			/*std::cout<<f_derivative_matrix[0]<<"\n";
+			std::cout<<f_derivative_matrix[1]<<"\n";
+			std::cout<<f_derivative_matrix[2]<<"\n";
+			std::cout<<f_derivative_matrix[3]<<"\n";*/
 		}	
+	//sparseMatrix->Save("nonlinear.txt");
+
 	}
+	//getchar();
+
 }

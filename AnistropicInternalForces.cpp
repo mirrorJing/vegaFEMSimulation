@@ -283,7 +283,7 @@ void AnisotropicInternalForces::ComputeForces(const double * vertexDisplacements
 	ResetVector(forces);
 	if(!tet_mesh_)
 	{
-		std::cout<<"Volumetric mesh is not exist!\n";
+		std::cout<<"Tet mesh is not exist!\n";
 		return;
 	}
 	AnisotropicInternalForces::StrainType strain_type=GREEN_STRAIN;
@@ -293,10 +293,11 @@ void AnisotropicInternalForces::ComputeForces(const double * vertexDisplacements
 	for(unsigned int i=0;i<ele_num_;++i)
 		current_dis_matrix[i].set(0.0);
 	current_dis_matrix=getCurrentDisplacementMatrixOnAllElements(vertexDisplacements);
+	//std::cout<<"forces:"<<"\n";
 	for(unsigned int ele_idx = 0; ele_idx <ele_num_; ++ele_idx)
 	{
-		int * vert_global_idx;
-		vert_global_idx=(int*)malloc(sizeof(int)*ele_vert_num_);
+		int vert_global_idx[4];
+		//vert_global_idx=(int*)malloc(sizeof(int)*ele_vert_num_);
 		for(unsigned int k=0;k<ele_vert_num_;++k)
 		{
 			vert_global_idx[k] = volumetric_mesh_->getVertexIndex(ele_idx,k);
@@ -319,9 +320,12 @@ void AnisotropicInternalForces::ComputeForces(const double * vertexDisplacements
 					forces[3*vert_global_idx[i]+j]+=force_matrix[j][i];
 				}
 			}	
+		//	std::cout<<forces[3*vert_global_idx[i]]<<","<<forces[3*vert_global_idx[i]]<<","<<forces[3*vert_global_idx[i]+1]<<","<<forces[3*vert_global_idx[i]+2]<<",";
 		}
-	free(vert_global_idx);
+	//free(vert_global_idx);
+		
 	}
+	//std::cout<<"\n";
 	//std::cout<<"f[3591]="<<forces[3591]<<","<<forces[3592]<<","<<forces[3593]<<"\n";
 	if (add_gravity_)
 	{

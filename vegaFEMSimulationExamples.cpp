@@ -68,8 +68,6 @@ Lighting * lighting = NULL;
 SceneObjectDeformable * volumetricSurfaceMesh = NULL;
 SceneObjectDeformable * renderingMesh = NULL;
 SceneObjectDeformable ** objectRenderSurfaceMesh = NULL;
-//SceneObjectDeformable * objectRenderSurfaceMesh1 = NULL;
-//SceneObjectDeformable * objectRenderSurfaceMesh2 = NULL;
 SceneObjectDeformable **extraObjectsInScene=NULL;
 SceneObject * extraSceneGeometry = NULL;
 int renderVolumetricSurface=1;
@@ -86,31 +84,16 @@ char renderingMeshFilename[string_length];
 char volumetricSurfaceMeshFilename[string_length];
 char ** objectRenderSurfaceMeshFilename;
 char ** objectRenderSurfaceMeshInterpolationFilename;
-//char objectRenderSurfaceMeshFilename1[string_length];
-//char objectRenderSurfaceMeshFilename2[string_length];
-//char objectRenderSurfaceMeshInterpolationFilename1[string_length];
-//char objectRenderSurfaceMeshInterpolationFilename2[string_length];
 char extraObjectsFileNameBase[string_length];
 int extraObjectsNum=0;
 
 //interpolation to embedded object render surface mesh
-int objectRenderSurfaceMeshFileNum=3;
+int objectRenderSurfaceMeshFileNum=1;
 int * objectRenderSurfaceMeshInterpolationElementVerticesNum;
 int ** objectRenderSurfaceMeshInterpolationVertices=NULL;
 double ** objectRenderSurfaceMeshInterpolationWeights=NULL;
 
 
-//int objectRenderSurfaceMeshInterpolationElementVerticesNum0;
-//int * objectRenderSurfaceMeshInterpolationVertices0=NULL;
-//double * objectRenderSurfaceMeshInterpolationWeights0=NULL;
-//
-//int objectRenderSurfaceMeshInterpolationElementVerticesNum1;
-//int * objectRenderSurfaceMeshInterpolationVertices1=NULL;
-//double * objectRenderSurfaceMeshInterpolationWeights1=NULL;
-//
-//int objectRenderSurfaceMeshInterpolationElementVerticesNum2;
-//int * objectRenderSurfaceMeshInterpolationVertices2=NULL;
-//double * objectRenderSurfaceMeshInterpolationWeights2=NULL;
 
 char deformableObjectMethod[string_length];
 char fixedVerticesFilename[string_length];
@@ -153,8 +136,9 @@ int timeStepCounter=0;
 int totalSteps=0;
 double frame_rate=1.0;
 int totalFrame = 0;
-double total_simulation_time=0.0;
 int simulation_frame_count=0;
+double total_simulation_time=0.0;
+double total_save_file_time=0.0;
 
 float newmarkBeta = 0.25;
 float newmarkGamma = 0.5;
@@ -200,8 +184,6 @@ SparseMatrix * massMatrix = NULL;
 SparseMatrix * LaplacianDampingMatrix = NULL;
 int simulation_vertice_num;
 double **uRenderSurface=NULL;//displacement of the object render surface mesh
-//double *uRenderSurface1=NULL;//displacement of the object render surface mesh
-//double *uRenderSurface2=NULL;//displacement of the object render surface mesh
 double * u = NULL;
 double * uvel = NULL;
 double * uaccel = NULL;
@@ -219,7 +201,6 @@ GLUI_StaticText * forceAssemblyStaticText;
 
 //test_case_1:bar twist
 double * initial_pos;
-
 //function declaration
 void addGravitySwitch(bool addGravity);
 void displayFunction(void);
@@ -245,11 +226,11 @@ void print_bitmap_string(float x, float y, float z, void * font, char * s)
 //save current object render surface  to an obj file
 void saveCurrentObjectSurface(int code)
 {
+	PerformanceCounter save_file_counter;
+	double each_frame_save_file=0.0;
+	save_file_counter.StartCounter();
 	stringstream adaptor;
 	string outputFileName[objectRenderSurfaceMeshFileNum];
-	/*string outputFileName0(outputFileNameBase);
-	string outputFileName1(outputFileNameBase);
-	string outputFileName2(outputFileNameBase);*/
 	string outputFileIndexStr;
 	string outputObjectFileName,object_idx_str;
 	adaptor<<outputFileIndex++;
@@ -265,17 +246,16 @@ void saveCurrentObjectSurface(int code)
 		outputFileName[i]=outputFileNameBase+object_idx_str+"_"+outputFileIndexStr+".obj";
 		ObjMesh *mesh=objectRenderSurfaceMesh[i]->GetMesh();
 		mesh->save(outputFileName[i],0);
+		cout<<outputFileName[i]<<" saved.\n";
 	}
-	/*outputFileName1+="1_"+outputFileIndexStr+".obj";
-	outputFileName2+="2_"+outputFileIndexStr+".obj";*/
-	//outputFileName+=".obj";
-	/*ObjMesh *mesh0=objectRenderSurfaceMesh0->GetMesh();
-	mesh0->save(outputFileName0,0);
-	ObjMesh *mesh1=objectRenderSurfaceMesh1->GetMesh();
-	mesh1->save(outputFileName1,0);
-	ObjMesh *mesh2=objectRenderSurfaceMesh2->GetMesh();
-	mesh2->save(outputFileName2,0);*/
-	cout<<outputFileName<<" saved.\n";
+	save_file_counter.StopCounter();
+	each_frame_save_file=save_file_counter.GetElapsedTime();
+	total_save_file_time+=each_frame_save_file;
+	std::cout<<"Current frame save file time is "<<each_frame_save_file<<" s.\n";
+	if(timeStepCounter==(totalSteps-1))
+	{
+		std::cout<<"Total save files time is "<<total_save_file_time<<" s; Average: "<<total_save_file_time/totalFrame<<" s/frame.\n";
+	}
 }
 
 //***********************************************graphics loop function***************************************
@@ -461,9 +441,9 @@ void outputFilesLoop(void)
 	// apply any scripted force loads
 	PerformanceCounter each_frame_performance_counter;
 	double each_frame_time=0.0;
+	each_frame_performance_counter.StartCounter();
 	while(timeStepCounter<totalSteps)
 	{
-		each_frame_performance_counter.StartCounter();
 		memcpy(f_ext, f_extBase, sizeof(double) * 3 * simulation_vertice_num);
 		if (timeStepCounter < numForceLoads)
 		{
@@ -487,30 +467,20 @@ void outputFilesLoop(void)
 		memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);	
 		volumetricSurfaceMesh->SetVertexDeformations(u);	
 
-		/*VolumetricMesh::interpolate(u,uRenderSurface,objectRenderSurfaceMesh->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum0,
-			objectRenderSurfaceMeshInterpolationVertices0,objectRenderSurfaceMeshInterpolationWeights0);
-		objectRenderSurfaceMesh0->SetVertexDeformations(uRenderSurface0);*/
-
 		for(int i=0;i<objectRenderSurfaceMeshFileNum;++i)
 		{
 			VolumetricMesh::interpolate(u,uRenderSurface[i],objectRenderSurfaceMesh[i]->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum[i],
 				objectRenderSurfaceMeshInterpolationVertices[i],objectRenderSurfaceMeshInterpolationWeights[i]);
 			objectRenderSurfaceMesh[i]->SetVertexDeformations(uRenderSurface[i]);	
 		}		
-
-		/*VolumetricMesh::interpolate(u,uRenderSurface1,objectRenderSurfaceMesh1->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum1,
-			objectRenderSurfaceMeshInterpolationVertices1,objectRenderSurfaceMeshInterpolationWeights1);
-		objectRenderSurfaceMesh1->SetVertexDeformations(uRenderSurface1);	
-		VolumetricMesh::interpolate(u,uRenderSurface2,objectRenderSurfaceMesh2->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum2,
-			objectRenderSurfaceMeshInterpolationVertices2,objectRenderSurfaceMeshInterpolationWeights2);
-		objectRenderSurfaceMesh2->SetVertexDeformations(uRenderSurface2);	
-*/
 		volumetricSurfaceMesh->BuildNormals();
 		renderingMesh->BuildNormals();
 		
 		//save object surface mesh to files			
 		if(((timeStepCounter+1)%(int)(1.0/(frame_rate*timeStep))==0)&&(timeStepCounter>0))
 		{
+			cout<<"frame "<<(timeStepCounter+1)%(int)(1.0/(frame_rate*timeStep))<<" begins \n";
+			each_frame_performance_counter.StopCounter();
 			each_frame_time=each_frame_performance_counter.GetElapsedTime();
 			std::cout<<"Current frame simulation time is "<<each_frame_time<<" s.\n";
 			total_simulation_time+=each_frame_time;
@@ -519,10 +489,11 @@ void outputFilesLoop(void)
 			{
 				std::cout<<"Total simulation time is "<<total_simulation_time<<" s; Average: "<<total_simulation_time/totalFrame<<" s/frame.\n";
 			}	
+			each_frame_performance_counter.StartCounter();
 		}
-		each_frame_performance_counter.StopCounter();
 		timeStepCounter++;
 	}
+	each_frame_performance_counter.StopCounter();
 }
 // called periodically by GLUT:
 void idleFunction(void)
@@ -625,15 +596,6 @@ void idleFunction(void)
 			objectRenderSurfaceMeshInterpolationVertices[i],objectRenderSurfaceMeshInterpolationWeights[i]);
 		objectRenderSurfaceMesh[i]->SetVertexDeformations(uRenderSurface[i]);	
 	}
-	/*VolumetricMesh::interpolate(u,uRenderSurface0,objectRenderSurfaceMesh0->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum0,
-		objectRenderSurfaceMeshInterpolationVertices0,objectRenderSurfaceMeshInterpolationWeights0);
-	objectRenderSurfaceMesh0->SetVertexDeformations(uRenderSurface0);	
-	VolumetricMesh::interpolate(u,uRenderSurface1,objectRenderSurfaceMesh1->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum1,
-		objectRenderSurfaceMeshInterpolationVertices1,objectRenderSurfaceMeshInterpolationWeights1);
-	objectRenderSurfaceMesh1->SetVertexDeformations(uRenderSurface1);	
-	VolumetricMesh::interpolate(u,uRenderSurface2,objectRenderSurfaceMesh2->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum2,
-		objectRenderSurfaceMeshInterpolationVertices2,objectRenderSurfaceMeshInterpolationWeights2);
-	objectRenderSurfaceMesh2->SetVertexDeformations(uRenderSurface2);	*/
 	//save object surface mesh to files
 	if((!lockScene)&&(!pauseSimulation)&&saveMeshToFile&&(timeStepCounter%timestepPerOutputFile==0))
 		saveCurrentObjectSurface(0);
@@ -1008,27 +970,9 @@ void initSimulation()
 	volumetricSurfaceMesh->BuildNeighboringStructure();
 	volumetricSurfaceMesh->BuildNormals(); 
 	volumetricSurfaceMesh->SetMaterialAlpha(0.5);
-
-	/*volumetricSurfaceMesh1 = new SceneObjectDeformable(renderingMeshFilename1);
-	if (enableTextures)
-		volumetricSurfaceMesh1->SetUpTextures(SceneObject::MODULATE, SceneObject::NOMIPMAP);
-	volumetricSurfaceMesh1->ResetDeformationToRest();
-	volumetricSurfaceMesh1->BuildNeighboringStructure();
-	volumetricSurfaceMesh1->BuildNormals(); 
-	volumetricSurfaceMesh1->SetMaterialAlpha(0.5);
-
-	volumetricSurfaceMesh2 = new SceneObjectDeformable(renderingMeshFilename2);
-	if (enableTextures)
-		volumetricSurfaceMesh2->SetUpTextures(SceneObject::MODULATE, SceneObject::NOMIPMAP);
-	volumetricSurfaceMesh2->ResetDeformationToRest();
-	volumetricSurfaceMesh2->BuildNeighboringStructure();
-	volumetricSurfaceMesh2->BuildNormals(); 
-	volumetricSurfaceMesh2->SetMaterialAlpha(0.5);*/
 	if(objectRenderSurfaceMeshFileNum>0)
 	{
 		objectRenderSurfaceMesh = new SceneObjectDeformable*[objectRenderSurfaceMeshFileNum];
-		//objectRenderSurfaceMeshFilename=new string[objectRenderSurfaceMeshFileNum];
-		//objectRenderSurfaceMeshInterpolationFilename= new string[objectRenderSurfaceMeshFileNum];
 		objectRenderSurfaceMeshInterpolationElementVerticesNum=new int[objectRenderSurfaceMeshFileNum];
 		objectRenderSurfaceMeshInterpolationVertices=new int*[objectRenderSurfaceMeshFileNum];
 		objectRenderSurfaceMeshInterpolationWeights=new double*[objectRenderSurfaceMeshFileNum];
@@ -1040,17 +984,9 @@ void initSimulation()
 			objectRenderSurfaceMeshFilename[i]=new char[string_length];
 		}	
 	}
-
-	//objectRenderSurfaceMesh1=new SceneObjectDeformable(objectRenderSurfaceMeshFilename1);
-	//uRenderSurface1=(double*)calloc(3*objectRenderSurfaceMesh1->Getn(),sizeof(double));//allocate space for the displacements of surface vertices
-
-	//objectRenderSurfaceMesh2=new SceneObjectDeformable(objectRenderSurfaceMeshFilename2);
-	//uRenderSurface2=(double*)calloc(3*objectRenderSurfaceMesh2->Getn(),sizeof(double));//allocate space for the displacements of surface vertices
-
 	//default rendering mesh is the object render surface mesh
 	delete(renderingMesh);
 	renderingMesh=volumetricSurfaceMesh/*objectRenderSurfaceMesh0*/;
-	//renderingMesh=new SceneObjectDeformable(renderingMeshFilename);
 	if(enableTextures)
 		renderingMesh->SetUpTextures(SceneObject::MODULATE,SceneObject::NOMIPMAP);  
 	renderingMesh->ResetDeformationToRest();
@@ -1058,9 +994,6 @@ void initSimulation()
 	renderingMesh->BuildNormals();
 
 	//load interpolation structure for object render surface
-	/*if(objectRenderSurfaceMeshNum>0)
-	{*/
-
 	for(int i=0;i<objectRenderSurfaceMeshFileNum;++i)
 	{
 		if(strcmp(objectRenderSurfaceMeshInterpolationFilename[i],"__none")==0)
@@ -1078,41 +1011,6 @@ void initSimulation()
 		VolumetricMesh::loadInterpolationWeights(objectRenderSurfaceMeshInterpolationFilename[i],objectRenderSurfaceMesh[i]->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum[i],
 			&objectRenderSurfaceMeshInterpolationVertices[i],&objectRenderSurfaceMeshInterpolationWeights[i]);
 	}
-/**************************************************/
-
-		/*if(strcmp(objectRenderSurfaceMeshInterpolationFilename1,"__none")==0)
-		{
-			cout<<"Error: no object render surface mesh interpolation filename specified.\n";
-			exit(1);
-		}
-		objectRenderSurfaceMeshInterpolationElementVerticesNum1=VolumetricMesh::getNumInterpolationElementVertices(objectRenderSurfaceMeshInterpolationFilename1);
-		if(objectRenderSurfaceMeshInterpolationElementVerticesNum1<0)
-		{
-			cout<<"Error: unable to open file "<<objectRenderSurfaceMeshInterpolationFilename1<<".\n";
-			exit(1);
-		}
-		cout<<"Num interpolation element vertices: "<<objectRenderSurfaceMeshInterpolationElementVerticesNum1<<".\n";
-		VolumetricMesh::loadInterpolationWeights(objectRenderSurfaceMeshInterpolationFilename1,objectRenderSurfaceMesh1->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum1,
-			&objectRenderSurfaceMeshInterpolationVertices1,&objectRenderSurfaceMeshInterpolationWeights1);*/
-/**************************************************/
-
-		/*if(strcmp(objectRenderSurfaceMeshInterpolationFilename2,"__none")==0)
-		{
-			cout<<"Error: no object render surface mesh interpolation filename specified.\n";
-			exit(1);
-		}
-		objectRenderSurfaceMeshInterpolationElementVerticesNum2=VolumetricMesh::getNumInterpolationElementVertices(objectRenderSurfaceMeshInterpolationFilename2);
-		if(objectRenderSurfaceMeshInterpolationElementVerticesNum2<0)
-		{
-			cout<<"Error: unable to open file "<<objectRenderSurfaceMeshInterpolationFilename2<<".\n";
-			exit(1);
-		}
-		cout<<"Num interpolation element vertices: "<<objectRenderSurfaceMeshInterpolationElementVerticesNum2<<".\n";
-		VolumetricMesh::loadInterpolationWeights(objectRenderSurfaceMeshInterpolationFilename2,objectRenderSurfaceMesh2->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum2,
-			&objectRenderSurfaceMeshInterpolationVertices2,&objectRenderSurfaceMeshInterpolationWeights2);*/
-
-	//}
-	
 
 	// read the fixed vertices
 	// 1-indexed notation
@@ -1597,15 +1495,37 @@ void initFunction(int test_case_)
 			u[3*i+2]=initial_pos[3*i+2]-vec_pos[2];			
 		}
 		//set the displacement of the fixed vertices
-		/*for(unsigned int i=0;i<numFixedVertices;++i)
+		for(unsigned int i=0;i<numFixedVertices;++i)
 		{
 			u[fixedDOFs[3*i+0]]=u[fixedDOFs[3*i+1]]=u[fixedDOFs[3*i+2]]=0.0;
-		}*/
+		}
 		integratorBase->SetState(u, velInitial);
+	}
+	else if(test_case==2)
+	{
+		Vec3d rotate_center(-1.25,-0.5,-0.5);
+		double rotate_omega=-30*2*PI/360.0;
+		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+		{
+			//velInitial[3*i+1]=-10.0;
+			Vec3d vect_pos=*volumetricMesh->getVertex(i);
+			/*velInitial[3*i+1]=rotate_omega*(vect_pos[2]-rotate_center[2]);
+			velInitial[3*i+2]=(-1.0)*rotate_omega*(vect_pos[1]-rotate_center[1]);
+			velInitial[3*i]=0.0;*/			
+			u[3*i]=u[3*i+1]=u[3*i+2]=0.0;
+			/*u[3*i]=rotate_center[0]+(vect_pos[0]-rotate_center[0])*cos(rotate_omega)-(vect_pos[1]-rotate_center[1])*sin(rotate_omega)-vect_pos[0];
+			u[3*i+1]=rotate_center[1]+(vect_pos[0]-rotate_center[0])*sin(rotate_omega)+(vect_pos[1]-rotate_center[1])*cos(rotate_omega)-vect_pos[1];
+			u[3*i+2]=0.0;*/
+			/*velInitial[3*i+0]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;*/
+			velInitial[3*i+1]=-10.0+rotate_omega*(vect_pos[0]-rotate_center[0]);
+			velInitial[3*i]=(-1.0)*rotate_omega*(vect_pos[1]-rotate_center[1]);
+			velInitial[3*i+2]=0.0;
+		}
+		integratorBase->SetState(u,velInitial);
 	}
 	else if(test_case==3)
 	{
-		Vec3d rotate_center(-1.25,-0.5,-0.5);
+		Vec3d rotate_center(1.2,0,0);
 		//Vec3d rotate_center(0,-0.5,0);
 		double rotate_omega=-60*2*PI/360.0;
 		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
@@ -1618,8 +1538,8 @@ void initFunction(int test_case_)
 			velInitial[3*i]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;*/
 			//totate
 			Vec3d vect_pos=*volumetricMesh->getVertex(i);
-			velInitial[3*i+1]=rotate_omega*(vect_pos[2]-rotate_center[2]);
-			velInitial[3*i+2]=(-1.0)*rotate_omega*(vect_pos[1]-rotate_center[1]);
+			velInitial[3*i+1]=10.0/*rotate_omega*(vect_pos[2]-rotate_center[2])*/;
+			velInitial[3*i+2]=0.0/*(-1.0)*rotate_omega*(vect_pos[1]-rotate_center[1])*/;
 			velInitial[3*i]=0.0;			
 			u[3*i]=u[3*i+1]=u[3*i+2]=0.0;
 		}

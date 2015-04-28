@@ -188,9 +188,9 @@ Mat3d CorotationalAnisotropicFEM::getInistialDisplacementMatrixOnEachElement(uns
 		result_vec[dim][2]=vert_pos[2][dim]-vert_pos[3][dim];
 	}
 	Mat3d result_matrix(result_vec[0],result_vec[1],result_vec[2]);
-	delete [] vert_idx;
-	delete [] vert_pos;
-	delete [] result_vec;
+	free(vert_idx);
+	free(vert_pos);
+	free(result_vec);
 	return result_matrix;
 }
 
@@ -210,6 +210,7 @@ Mat3d CorotationalAnisotropicFEM::getCurrentDisplacementMatrixOnEachElement(cons
 	}
 	Mat3d result_matrix(result_vec[0],result_vec[1],result_vec[2]);
 	return result_matrix;
+	free(result_vec);
 }
 vector<Mat3d> CorotationalAnisotropicFEM::getCurrentDisplacementMatrixOnAllElements(const double *vert_displacement) const
 {
@@ -246,10 +247,10 @@ vector<Mat3d> CorotationalAnisotropicFEM::getCurrentDisplacementMatrixOnAllEleme
 		}
 		Mat3d result_matrix(result_vec[0],result_vec[1],result_vec[2]);
 		result_matrix_vector[ele_idx]=result_matrix;
-		delete [] vert_idx;
-		delete [] vert_pos;
-		delete [] origin_vert_pos;
-		delete [] result_vec;
+		free(vert_idx);
+		free(vert_pos);
+		free(origin_vert_pos);
+		free(result_vec);
 	}	
 	return result_matrix_vector;
 }
@@ -505,10 +506,10 @@ Mat3d CorotationalAnisotropicFEM::firstPiolaKirchhoffStressDerivative(unsigned i
 	Mat3d result_matrix(0.0);
 	result_matrix=F_derivative*elastic_multiply_strain_matrix;
 	result_matrix+=F*elastic_multiply_strain_derivative_matrix;
-	delete [] elastic_multiply_strain;
-	delete [] elastic_multiply_strain_derivative;
+	free(elastic_multiply_strain);
+	free(elastic_multiply_strain_derivative);
 	delete [] strain_tensor_vector;
-	delete [] strain_tensor_derivative_vector;
+	free(strain_tensor_derivative_vector);
 	return result_matrix;
 }
 
@@ -550,47 +551,6 @@ void CorotationalAnisotropicFEM::ComputeStiffnessMatrixOnEachElement(double * sm
 	}
 	CorotationalAnisotropicFEM::StrainType strain_type=CAUCHY_STRAIN;
 	Mat3d init_dis_matrix=getInistialDisplacementMatrixOnEachElement(ele_idx);
-	//Mat3d current_dis_matrix=getCurrentDisplacementMatrixOnEachElement(current_ele_pos,ele_idx);	
-	//std::cout<<"current_dis_matrix:"<<current_dis_matrix<<"\n";
-	/*for(unsigned int i=0;i<12;++i)
-	{
-		std::cout<<"current_ele_dis:"<<current_ele_dis[i]<<",";
-	}
-	std::cout<<"\n";*/
-	//Mat3d F=getDeformationGradient(init_dis_matrix,current_dis_matrix);
-	//std::cout<<"F:"<<F<<"\n";
-	//double F_vector[9];
-	//for(unsigned int i=0;i<3;++i)
-	//{
-	//	for(unsigned int j=0;j<3;++j)
-	//	{
-	//		F_vector[3*i+j]=F[i][j];
-	//		//std::cout<<"F_vector:"<<3*i+j<<"-"<<F[i][j]<<",";
-	//	}
-	//}
-
-	//double R[9], S[9];
-	//double det=PolarDecomposition::Compute(F_vector,R,S);
-	//if(det<0)
-	//{
-	//	for(int i=0;i<9;++i)
-	//		R[i]*=-1.0;
-	//}
-	/*double small_deformation_pos[12]={0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-	for(unsigned int i=0;i<ele_vert_num_;++i)
-	{
-		for(unsigned int j=0;j<3;++j)
-		{
-			for(unsigned int k=0;k<3;++k)
-			{
-				small_deformation_pos[3*i+j]+=R[3*k+j]*current_ele_pos[3*i+k];
-			}			
-		}
-	}*/
-	/*std::cout<<"small_deformation_dis:\n";
-	for(unsigned int i=0;i<12;++i)
-		std::cout<<small_deformation_pos[i]<<",";
-	std::cout<<"\n";*/
 	Mat3d small_deformation_dis_matrix=getCurrentDisplacementMatrixOnEachElement(small_deformation_pos,ele_idx);
 	Mat3d F_new=getDeformationGradient(init_dis_matrix,small_deformation_dis_matrix);
 	double ele_volume=tet_mesh_->getTetVolume(tet_mesh_->getVertex(ele_idx,0),tet_mesh_->getVertex(ele_idx,1),tet_mesh_->getVertex(ele_idx,2),tet_mesh_->getVertex(ele_idx,3));
@@ -714,7 +674,7 @@ void CorotationalAnisotropicFEM::ComputeForceAndStiffnessMatrixOfSubmesh(double 
 	if (f_int != NULL)
 	{	
 		ComputeForces(vertexDisplacements,f_int);
-	}	
+	}
 }
 
 void CorotationalAnisotropicFEM::ComputeForces(const double * vertexDisplacements, double * forces)

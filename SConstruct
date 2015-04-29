@@ -82,7 +82,7 @@ source_filename=Glob('*.cpp',True,False,True)
 
 target_filename='vegaFEMSimulation'+build_type
 if build_type=='release':
-  	target_filename='vegaFEMSimulation'
+      target_filename='vegaFEMSimulation'
 	#target_filename='secondVegaFEMSimulation'
 
 #LIB FILES

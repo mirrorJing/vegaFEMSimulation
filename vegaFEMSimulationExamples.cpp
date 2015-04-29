@@ -192,6 +192,7 @@ double * f_col=NULL;//collision force
 double * f_extBase = NULL;
 double * uInitial = NULL;
 double * velInitial = NULL;
+double * gravity_force = NULL;
 int * fixedDOFs;
 // glui
 GLUI * glui;
@@ -460,6 +461,14 @@ void outputFilesLoop(void)
 				f_ext[i]+=f_col[i];
 			}
 		}
+		if(deformableObject == COROTLINFEM)
+		{
+			
+			for(int i=0;i<3*simulation_vertice_num;++i)
+			{
+				f_ext[i]+=gravity_force[i];
+			}
+		}
 		integratorBaseSparse->SetExternalForces(f_ext);
 		simulationFunction(test_case);
 		int code = integratorBase->DoTimestep();
@@ -576,7 +585,15 @@ void idleFunction(void)
 			{
 				f_ext[i]+=f_col[i];
 			}
-		}		
+		}
+
+		if(deformableObject == COROTLINFEM)
+		{
+			for(int i=0;i<3*simulation_vertice_num;++i)
+			{
+				f_ext[i]+=gravity_force[i];
+			}
+		}
 		// set forces to the integrator
 		integratorBaseSparse->SetExternalForces(f_ext);
 		if(timeStepCounter < totalSteps)
@@ -1047,6 +1064,7 @@ void initSimulation()
 	f_ext = (double*) calloc (3*simulation_vertice_num, sizeof(double));
 	f_extBase = (double*) calloc (3*simulation_vertice_num, sizeof(double));
 	f_col=(double*)calloc(3*simulation_vertice_num,sizeof(double));
+	gravity_force=(double*)calloc(3*simulation_vertice_num,sizeof(double));
 	if(test_case==1)
 	{
 		initial_pos=(double*) calloc (3*simulation_vertice_num, sizeof(double));
@@ -1147,6 +1165,8 @@ void initSimulation()
 
 		corotationalLinearFEMForceModel = new CorotationalLinearFEMForceModel(corotationalLinearFEM, corotationalLinearFEM_warp);
 		forceModel = corotationalLinearFEMForceModel;
+		volumetricMesh->computeGravity(gravity_force,g,addGravity);
+		
 	}
 	if (deformableObject == LINFEM)
 	{
@@ -1245,35 +1265,10 @@ void initConfigurations()
 	configFile.addOptionOptional("outputFileNameBase",outputFileNameBase,"output");
 	configFile.addOptionOptional("timestepPerOutputFile",&timestepPerOutputFile,timestepPerOutputFile);
 	configFile.addOptionOptional("saveMeshToFile",&saveMeshToFile,saveMeshToFile); 
-
 	configFile.addOptionOptional("volumetricMeshFilename", volumetricSurfaceMeshFilename, "__none");
-	std::cout<<"obj:"<<volumetricSurfaceMeshFilename<<"------------------------------------\n";
 	configFile.addOptionOptional("renderingMeshFilename", renderingMeshFilename, "__none");
 	configFile.addOptionOptional("objectRenderSurfaceMeshFileNum", &objectRenderSurfaceMeshFileNum, objectRenderSurfaceMeshFileNum);
-	/*for(int i=0;i<objectRenderSurfaceMeshFileNum;++i)
-	{*/
-	//	std::cout<<"obj:"<<objectRenderSurfaceMeshFileNum<<"------------------------------------\n";
-	//	objectRenderSurfaceMeshFilename->size(objectRenderSurfaceMeshFileNum);
-		//*objectRenderSurfaceMeshFilename=new char[objectRenderSurfaceMeshFileNum];
-	//	*objectRenderSurfaceMeshInterpolationFilename=new char[objectRenderSurfaceMeshFileNum];
-	//for(int i=0;i<objectRenderSurfaceMeshFileNum;++i)
-	//{
-	//	char option_name[128];
-	//	char index_ch='0'+i;
-	////	std::cout<<"index:"<<index_ch<<"\n";
-	//	sprintf(option_name,"objectRenderSurfaceMeshFilename%c",index_ch);
-	////	std::cout<<i<<":-----------------"<<option_name<<"\n";
-	////	std::cout<<i<<":-----------------"<<option_name1<<"\n";
-	//	configFile.addOptionOptional(option_name,objectRenderSurfaceMeshFilename[i],"examples/heart/fine/heart0-render.obj");
-	//	std::cout<<"objectRenderSurfaceMeshFilename["<<i<<"]:"<<objectRenderSurfaceMeshFilename[i]<<"\n";
-	//	sprintf(option_name,"objectRenderSurfaceMeshInterpolationFilename%c",index_ch);
-	//		std::cout<<i<<":-----------------"<<option_name<<"\n";
-	//	configFile.addOptionOptional(option_name,objectRenderSurfaceMeshInterpolationFilename[i],"examples/heart/fine/heart0.interp");
-	//	std::cout<<"objectRenderSurfaceMeshInterpolationFilename:"<<objectRenderSurfaceMeshInterpolationFilename[i]<<"\n";
-		//}	
-		//std::cout<<"dddddddddddd";
 	objectRenderSurfaceMeshFilename=(char**)malloc(sizeof(char)*objectRenderSurfaceMeshFileNum*string_length);
-	//std::cout<<objectRenderSurfaceMeshFileNum<<"--------------------------------";
 	objectRenderSurfaceMeshInterpolationFilename=(char**)malloc(sizeof(char)*objectRenderSurfaceMeshFileNum*string_length);
 	for(int i=0;i<objectRenderSurfaceMeshFileNum;++i)
 	{
@@ -1289,16 +1284,6 @@ void initConfigurations()
 		sprintf(option_name,"objectRenderSurfaceMeshInterpolationFilename%c",index_ch);
 		configFile.addOptionOptional(option_name,objectRenderSurfaceMeshInterpolationFilename[i],"__none");
 	}
-		/*std::cout<<"f";
-	configFile.addOptionOptional("objectRenderSurfaceMeshFilename0",objectRenderSurfaceMeshFilename[0],"__none");
-	configFile.addOptionOptional("objectRenderSurfaceMeshFilename1",objectRenderSurfaceMeshFilename[1],"__none");
-	configFile.addOptionOptional("objectRenderSurfaceMeshFilename2",objectRenderSurfaceMeshFilename[2],"__none");
-	configFile.addOptionOptional("objectRenderSurfaceMeshInterpolationFilename0",objectRenderSurfaceMeshInterpolationFilename[0],"__none");
-	configFile.addOptionOptional("objectRenderSurfaceMeshInterpolationFilename1",objectRenderSurfaceMeshInterpolationFilename[1],"__none");
-	configFile.addOptionOptional("objectRenderSurfaceMeshInterpolationFilename2",objectRenderSurfaceMeshInterpolationFilename[2],"__none");*/
-	//}	
-
-	//std::cout<<"dddddddddddd";
 	configFile.addOptionOptional("fixedVerticesFilename", fixedVerticesFilename, "__none");
 	configFile.addOptionOptional("massMatrixFilename", massMatrixFilename, "__none");
 	configFile.addOptionOptional("forceLoadsFilename", forceLoadsFilename, "__none");
@@ -1425,6 +1410,8 @@ int main(int argc, char* argv[])
 	cout<<"0.gravity\n";
 	cout<<"1.twist\n";
 	cout<<"2.fall off on the slope\n";
+	cout<<"3.\n";
+	cout<<"4.flower swing in the wind.\n";
 	cin>>test_case;
 	printf("Starting application.\n");
 	configFilename = string(configFilenameC);
@@ -1504,7 +1491,7 @@ void initFunction(int test_case_)
 	else if(test_case==2)
 	{
 		Vec3d rotate_center(-1.25,-0.5,-0.5);
-		double rotate_omega=-30*2*PI/360.0;
+		double rotate_omega=-100*2*PI/360.0;
 		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
 		{
 			//velInitial[3*i+1]=-10.0;
@@ -1544,6 +1531,26 @@ void initFunction(int test_case_)
 			u[3*i]=u[3*i+1]=u[3*i+2]=0.0;
 		}
 		integratorBase->SetState(u,velInitial);
+	}
+	else if(test_case==4)
+	{
+		//flower swing in the wind
+		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+		{
+			f_ext[3*i]=-1.0;
+			f_ext[3*i+1]=f_ext[3*i+2]=0.0;
+			/*velInitial[3*i+1]=-10.0;
+			velInitial[3*i+2]=0.0;
+			velInitial[3*i]=0.0;			
+			u[3*i]=u[3*i+1]=u[3*i+2]=0.0;*/
+		}
+		for(unsigned int i=0;i<numFixedVertices;++i)
+		{
+			f_ext[fixedDOFs[3*i+0]]=f_ext[fixedDOFs[3*i+1]]=f_ext[fixedDOFs[3*i+2]]=0.0;
+		}
+		//integratorBase->SetState(u,velInitial);
+		integratorBaseSparse->SetExternalForces(f_ext);
+		integratorBase->DoTimestep();
 	}
 }
 void testStiffnessMatrix(void)

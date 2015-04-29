@@ -209,8 +209,8 @@ Mat3d CorotationalAnisotropicFEM::getCurrentDisplacementMatrixOnEachElement(cons
 		result_vec[dim][2]=current_ele_pos[dim+6]-current_ele_pos[dim+9];
 	}
 	Mat3d result_matrix(result_vec[0],result_vec[1],result_vec[2]);
-	return result_matrix;
 	free(result_vec);
+	return result_matrix;
 }
 vector<Mat3d> CorotationalAnisotropicFEM::getCurrentDisplacementMatrixOnAllElements(const double *vert_displacement) const
 {

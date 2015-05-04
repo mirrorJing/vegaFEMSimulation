@@ -452,14 +452,15 @@ void outputFilesLoop(void)
 			for(int i=0; i<3*simulation_vertice_num; i++)
 				f_ext[i] += forceLoads[ELT(3*simulation_vertice_num, i, timeStepCounter)];
 		}
-		//apply the penalty collision forces with planes in scene
+		//apply the collision management with planes in scene
 		if(planeNumber>0)
 		{
-			planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),f_col);
+			/*planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),f_col);
 			for(int i=0;i<3*simulation_vertice_num;++i)
 			{
-				f_ext[i]+=f_col[i];
-			}
+			f_ext[i]+=f_col[i];
+			}*/
+			planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),integratorBase->Getqvel(),u,velInitial);
 		}
 		if(deformableObject == COROTLINFEM)
 		{
@@ -580,11 +581,12 @@ void idleFunction(void)
 		//apply the penalty collision forces with planes in scene
 		if(planeNumber>0)
 		{
-			planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),f_col);
+			/*planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),f_col);
 			for(int i=0;i<3*simulation_vertice_num;++i)
 			{
 				f_ext[i]+=f_col[i];
-			}
+			}*/
+			planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),integratorBase->Getqvel(),u,velInitial);
 		}
 
 		if(deformableObject == COROTLINFEM)

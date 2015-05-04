@@ -185,8 +185,6 @@ SparseMatrix * LaplacianDampingMatrix = NULL;
 int simulation_vertice_num;
 double **uRenderSurface=NULL;//displacement of the object render surface mesh
 double * u = NULL;
-double * uvel = NULL;
-double * uaccel = NULL;
 double * f_ext = NULL;
 double * f_col=NULL;//collision force
 double * f_extBase = NULL;
@@ -455,12 +453,17 @@ void outputFilesLoop(void)
 		//apply the collision management with planes in scene
 		if(planeNumber>0)
 		{
-			/*planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),f_col);
-			for(int i=0;i<3*simulation_vertice_num;++i)
-			{
-			f_ext[i]+=f_col[i];
-			}*/
-			planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),integratorBase->Getqvel(),u,velInitial);
+			//planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),f_col);
+
+			velInitial=integratorBase->Getqvel();
+			planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),velInitial);
+			for(unsigned int i=0;i<simulation_vertice_num;++i)
+			{				
+				u[3*i]=volumetricSurfaceMesh->GetMesh()->getPosition(i)[0]-(*volumetricMesh->getVertex(i))[0];
+				u[3*i+1]=volumetricSurfaceMesh->GetMesh()->getPosition(i)[1]-(*volumetricMesh->getVertex(i))[1];
+				u[3*i+2]=volumetricSurfaceMesh->GetMesh()->getPosition(i)[2]-(*volumetricMesh->getVertex(i))[2];
+			}
+			integratorBase->SetState(u,velInitial);
 		}
 		if(deformableObject == COROTLINFEM)
 		{
@@ -474,6 +477,7 @@ void outputFilesLoop(void)
 		simulationFunction(test_case);
 		int code = integratorBase->DoTimestep();
 		cout<<"timeStep "<<timeStepCounter<<" begins \n";
+
 		memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);	
 		volumetricSurfaceMesh->SetVertexDeformations(u);	
 
@@ -581,12 +585,21 @@ void idleFunction(void)
 		//apply the penalty collision forces with planes in scene
 		if(planeNumber>0)
 		{
-			/*planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),f_col);
-			for(int i=0;i<3*simulation_vertice_num;++i)
-			{
-				f_ext[i]+=f_col[i];
-			}*/
-			planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),integratorBase->Getqvel(),u,velInitial);
+			/*planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),f_col);*/
+			//for(int i=0;i<3*simulation_vertice_num;++i)
+			//{
+			////	f_ext[i]+=f_col[i];
+			//	
+			//}	
+			velInitial=integratorBase->Getqvel();
+			planesInScene->resolveContact(volumetricSurfaceMesh->GetMesh(),velInitial);
+			for(unsigned int i=0;i<simulation_vertice_num;++i)
+			{				
+				u[3*i]=volumetricSurfaceMesh->GetMesh()->getPosition(i)[0]-(*volumetricMesh->getVertex(i))[0];
+				u[3*i+1]=volumetricSurfaceMesh->GetMesh()->getPosition(i)[1]-(*volumetricMesh->getVertex(i))[1];
+				u[3*i+2]=volumetricSurfaceMesh->GetMesh()->getPosition(i)[2]-(*volumetricMesh->getVertex(i))[2];
+			}
+			integratorBase->SetState(u,velInitial);
 		}
 
 		if(deformableObject == COROTLINFEM)
@@ -608,7 +621,7 @@ void idleFunction(void)
 	}
 	memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);
 	volumetricSurfaceMesh->SetVertexDeformations(u);	
-	
+
 	for(int i=0;i<objectRenderSurfaceMeshFileNum;++i)
 	{
 		VolumetricMesh::interpolate(u,uRenderSurface[i],objectRenderSurfaceMesh[i]->Getn(),objectRenderSurfaceMeshInterpolationElementVerticesNum[i],

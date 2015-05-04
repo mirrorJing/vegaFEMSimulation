@@ -96,14 +96,11 @@ void Planes::render()
     }
 }
 
-void Planes::resolveContact(const ObjMesh *mesh/*,double *forces*/,const double *vel,double *u_new,double *vel_new)
+void Planes::resolveContact(ObjMesh *mesh,double *vel)
 {
     int vert_num=mesh->getNumVertices();
     double threshold=0.03*mesh->getDiameter();//the threshold to start resolve contact
 
-	//memset(forces,0.0,sizeof(double)*3*vert_num);
-	memset(u_new,0.0,sizeof(double)*3*vert_num);
-	memset(vel_new,0.0,sizeof(double)*3*vert_num);
     for(int plane_index=0;plane_index<plane_number;++plane_index)
     {
 		if(!plane_enabled[plane_index])
@@ -111,37 +108,28 @@ void Planes::resolveContact(const ObjMesh *mesh/*,double *forces*/,const double 
 		Vec3d unit_plane_normal=norm(plane_normal[plane_index]);//normalize the plane normal
 		for(int vert_index=0;vert_index<vert_num;++vert_index)
 		{
-			Vec3d rel_vec=mesh->getPosition(vert_index)-plane_center[plane_index];
+            Vec3d vert_pos = mesh->getPosition(vert_index); 
+			Vec3d rel_vec=vert_pos-plane_center[plane_index];
 			double dist_vec=dot(rel_vec,unit_plane_normal);
-		//	Vec3d vert_pos=mesh->getPosition(vert_index);
 			Vec3d vert_vel(0.0);
 			for(unsigned int i=0;i<3;++i)
-			{
 				vert_vel[i]=vel[3*vert_index+i];
-			}
-			if((dot(vert_vel,unit_plane_normal)<0)&&(dist_vec<threshold))
+            double vert_vel_dot_normal = dot(vert_vel,unit_plane_normal);
+            //collided
+			if((vert_vel_dot_normal<0)&&(dist_vec<threshold))
 			{
-				/*dot(vel,unit_plane_normal)=0;
-				vel_new=vel*unit_plane_normal;*/
-				//vel_new[3*vert_index+1]=0;
+                //first set the normal velocity of this vertex to plane velocity (0)
+                vert_vel = vert_vel - unit_plane_normal*vert_vel_dot_normal;
+                for(unsigned int i = 0; i < 3; ++i)
+                    vel[3*vert_index+i] = vert_vel[i];
 			}
-			//change x to handle penetrated
-			if(dist_vec<0)
-			{
-				/*u_new[0]=u_new[2]=0;
-				u_new[3*vert_index]=-rel_vec[1];*/
-			}
-			//Vec3d rel_vec=mesh->getPosition(vert_index)-plane_center[plane_index];
-			//
-			//if(dist_vec<threshold)//close than a threshold or penetrated
-			//{
-			//	if(dist_vec<0)
-			//		dist_vec=-dist_vec;
-			//	forces[3*vert_index+0]+=plane_bounce[plane_index]*dist_vec*unit_plane_normal[0];
-			//	forces[3*vert_index+1]+=plane_bounce[plane_index]*dist_vec*unit_plane_normal[1];
-			//	forces[3*vert_index+2]+=plane_bounce[plane_index]*dist_vec*unit_plane_normal[2];
-			//}
-
+            //project penetrated vertex to plane in normal direction
+            if(dist_vec<0)
+            {
+                Vec3d new_rel_vec = rel_vec - unit_plane_normal*dist_vec;
+                vert_pos = plane_center[plane_index] + new_rel_vec;
+                mesh->setPosition(vert_index,vert_pos);
+            }
 		}
     }
 }

@@ -88,7 +88,7 @@ char extraObjectsFileNameBase[string_length];
 int extraObjectsNum=0;
 
 //interpolation to embedded object render surface mesh
-int objectRenderSurfaceMeshFileNum=1;
+int objectRenderSurfaceMeshFileNum=3;
 int * objectRenderSurfaceMeshInterpolationElementVerticesNum;
 int ** objectRenderSurfaceMeshInterpolationVertices=NULL;
 double ** objectRenderSurfaceMeshInterpolationWeights=NULL;
@@ -1267,6 +1267,9 @@ void initConfigurations()
 	configFile.addOptionOptional("saveMeshToFile",&saveMeshToFile,saveMeshToFile); 
 	configFile.addOptionOptional("volumetricMeshFilename", volumetricSurfaceMeshFilename, "__none");
 	configFile.addOptionOptional("renderingMeshFilename", renderingMeshFilename, "__none");
+	std::cout<<"-----------------------------------------\n";
+	std::cout<<"renderingMeshFilename:"<<renderingMeshFilename<<"\n";
+	std::cout<<"-----------------------------------------\n";
 	configFile.addOptionOptional("objectRenderSurfaceMeshFileNum", &objectRenderSurfaceMeshFileNum, objectRenderSurfaceMeshFileNum);
 	objectRenderSurfaceMeshFilename=(char**)malloc(sizeof(char)*objectRenderSurfaceMeshFileNum*string_length);
 	objectRenderSurfaceMeshInterpolationFilename=(char**)malloc(sizeof(char)*objectRenderSurfaceMeshFileNum*string_length);

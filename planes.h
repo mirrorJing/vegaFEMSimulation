@@ -11,7 +11,7 @@
   --------------------------
 
   enable (int)
-  bounce (double)
+  frictionMu (double)
   center_X (double)
   center_Y (double)
   center_Z (double)
@@ -70,7 +70,7 @@ protected:
 protected:
     int plane_number;
     vector<int> plane_enabled;
-    vector<double> plane_bounce;
+    vector<double> plane_mu;
     vector<Vec3d> plane_center;
     vector<Vec3d> plane_normal;
     vector<double> plane_size;

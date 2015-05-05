@@ -9,7 +9,7 @@ Planes::Planes(char* config_file_name,int plane_number):plane_number(plane_numbe
     ConfigFile config_file;
 
     plane_enabled.resize(plane_number);
-    plane_bounce.resize(plane_number);
+    plane_mu.resize(plane_number);
     plane_center.resize(plane_number);
     plane_normal.resize(plane_number);
     plane_size.resize(plane_number);
@@ -26,8 +26,8 @@ Planes::Planes(char* config_file_name,int plane_number):plane_number(plane_numbe
 
 	sprintf(option_name,"planeEnabled_%c",plane_index_ch);
 	config_file.addOption(option_name,&plane_enabled[plane_index]);
-	sprintf(option_name,"planeBounce_%c",plane_index_ch);
-	config_file.addOption(option_name,&plane_bounce[plane_index]);
+	sprintf(option_name,"planeFrictionMu_%c",plane_index_ch);
+	config_file.addOption(option_name,&plane_mu[plane_index]);
 	sprintf(option_name,"planeCenter_%c_X",plane_index_ch);
 	config_file.addOption(option_name,&plane_center[plane_index][0]);
 	sprintf(option_name,"planeCenter_%c_Y",plane_index_ch);
@@ -118,8 +118,17 @@ void Planes::resolveContact(ObjMesh *mesh,double *vel)
             //collided
 			if((vert_vel_dot_normal<0)&&(dist_vec<threshold))
 			{
-                //first set the normal velocity of this vertex to plane velocity (0)
-                vert_vel = vert_vel - unit_plane_normal*vert_vel_dot_normal;
+                Vec3d vel_normal = unit_plane_normal*vert_vel_dot_normal;
+                Vec3d vel_tan = vert_vel - vel_normal;
+                //set the normal velocity of this vertex to plane velocity (0)
+                //apply friction in tangent direction
+                double vel_tan_len = len(vel_tan);
+                double vel_normal_len = len(vel_normal);
+                Vec3d vel_tan_dir = norm(vel_tan);
+                if( vel_tan_len > vel_normal_len*plane_mu[plane_index])
+                    vert_vel = (vel_tan_len-vel_normal_len*plane_mu[plane_index])*vel_tan_dir;
+                else
+                    vert_vel = 0*vel_tan_dir;
                 for(unsigned int i = 0; i < 3; ++i)
                     vel[3*vert_index+i] = vert_vel[i];
 			}

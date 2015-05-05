@@ -1,18 +1,18 @@
 *SET heart0
 *INCLUDE heart0.txt
 *MATERIAL mat0
-ENU, 1000, 7e+005,0.3
+ENU, 1000, 2.5e+006,0.3
 *REGION
 heart0,mat0
 *SET heart1
 *INCLUDE heart1.txt
 *MATERIAL mat1
-ENU, 1000, 1e+006,0.3
+ENU, 1000, 5.0e+006,0.3
 *REGION
 heart1,mat1
 *SET heart_rest
 *INCLUDE heart_rest.txt
 *MATERIAL mat_rest
-ENU, 1000, 4e+005,0.3
+ENU, 1000, 1.0e+006,0.3
 *REGION
 heart_rest,mat_rest

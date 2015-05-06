@@ -1516,10 +1516,10 @@ void initFunction(int test_case_)
 	}
 	else if(test_case==2)
 	{
-		//Vec3d rotate_center(-1.25,-0.5,-0.5);
-		//double rotate_omega=-100*2*PI/360.0;
-		//for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
-		//{
+		Vec3d rotate_center(-1.25,-0.5,-0.5);
+		double rotate_omega=-60*2*PI/360.0;
+		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+		{
 		//	//velInitial[3*i+1]=-10.0;
 		//	/*velInitial[3*i+1]=rotate_omega*(vect_pos[2]-rotate_center[2]);
 		//	velInitial[3*i+2]=(-1.0)*rotate_omega*(vect_pos[1]-rotate_center[1]);
@@ -1529,15 +1529,15 @@ void initFunction(int test_case_)
 		//	u[3*i+2]=0.0;*/
 		//	/*velInitial[3*i+0]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;*/	
 
+ 
 
-
-		//	Vec3d vect_pos=*volumetricMesh->getVertex(i);
-		//	u[3*i]=u[3*i+1]=u[3*i+2]=0.0;
-		//	velInitial[3*i+1]=-10.0+rotate_omega*(vect_pos[0]-rotate_center[0]);
-		//	velInitial[3*i]=(-1.0)*rotate_omega*(vect_pos[1]-rotate_center[1]);
-		//	velInitial[3*i+2]=0.0;
-		//}
-		//integratorBase->SetState(u,velInitial);
+			Vec3d vect_pos=*volumetricMesh->getVertex(i);
+			u[3*i]=u[3*i+1]=u[3*i+2]=0.0;
+			velInitial[3*i+1]=-2.0+/*-10.0+*/rotate_omega*(vect_pos[0]-rotate_center[0]);
+			velInitial[3*i]=(-1.0)*rotate_omega*(vect_pos[1]-rotate_center[1]);
+			velInitial[3*i+2]=0.0;
+		}
+		integratorBase->SetState(u,velInitial);
 	}
 	else if(test_case==3)
 	{

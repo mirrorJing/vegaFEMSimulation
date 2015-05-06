@@ -126,9 +126,11 @@ void Planes::resolveContact(ObjMesh *mesh,double *vel)
                 double vel_normal_len = len(vel_normal);
                 Vec3d vel_tan_dir = norm(vel_tan);
                 if( vel_tan_len > vel_normal_len*plane_mu[plane_index])
-                    vert_vel = (vel_tan_len-vel_normal_len*plane_mu[plane_index])*vel_tan_dir;
+                    vel_tan = (vel_tan_len-vel_normal_len*plane_mu[plane_index])*vel_tan_dir;
                 else
-                    vert_vel = 0*vel_tan_dir;
+                    vel_tan = 0*vel_tan_dir;
+                vel_normal *= -1;
+                vert_vel = vel_normal + vel_tan;
                 for(unsigned int i = 0; i < 3; ++i)
                     vel[3*vert_index+i] = vert_vel[i];
 			}

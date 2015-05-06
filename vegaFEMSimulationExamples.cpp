@@ -65,6 +65,7 @@ int renderSprings = 0;
 int lockScene=0;
 int pauseSimulation=1;
 Lighting * lighting = NULL;
+SceneObjectDeformable * initialSurfaceMesh = NULL;
 SceneObjectDeformable * volumetricSurfaceMesh = NULL;
 SceneObjectDeformable * renderingMesh = NULL;
 SceneObjectDeformable ** objectRenderSurfaceMesh = NULL;
@@ -101,6 +102,7 @@ char massMatrixFilename[string_length];
 char invertibleMaterialString[string_length] = "__none";
 char initialPositionFilename[string_length];
 char initialVelocityFilename[string_length];
+char initialSurfaceMeshFilename[string_length];
 char forceLoadsFilename[string_length];
 char elasticTensorFilename[string_length];
 //outputFile
@@ -906,6 +908,11 @@ void initSimulation()
 		printf("Error: no deformable model specified.\n");
 		exit(1);
 	}
+	//load initial position mesh
+	if(strcmp(initialSurfaceMeshFilename,"__none")!=0)
+	{
+		initialSurfaceMesh =  new SceneObjectDeformable(initialSurfaceMeshFilename);
+	}
 	// load mesh
 	if ((deformableObject == STVK) || (deformableObject == ANISOTROPIC) || (deformableObject == COROTLINFEM) || (deformableObject == COROTANISTROPIC) || (deformableObject == INVERTIBLEFEM))
 	{
@@ -1281,10 +1288,9 @@ void initConfigurations()
 	configFile.addOptionOptional("timestepPerOutputFile",&timestepPerOutputFile,timestepPerOutputFile);
 	configFile.addOptionOptional("saveMeshToFile",&saveMeshToFile,saveMeshToFile); 
 	configFile.addOptionOptional("volumetricMeshFilename", volumetricSurfaceMeshFilename, "__none");
+	configFile.addOptionOptional("initialSurfaceMeshFilename",initialSurfaceMeshFilename,"__none");
 	configFile.addOptionOptional("renderingMeshFilename", renderingMeshFilename, "__none");
-	std::cout<<"-----------------------------------------\n";
 	std::cout<<"renderingMeshFilename:"<<renderingMeshFilename<<"\n";
-	std::cout<<"-----------------------------------------\n";
 	configFile.addOptionOptional("objectRenderSurfaceMeshFileNum", &objectRenderSurfaceMeshFileNum, objectRenderSurfaceMeshFileNum);
 	objectRenderSurfaceMeshFilename=(char**)malloc(sizeof(char)*objectRenderSurfaceMeshFileNum*string_length);
 	objectRenderSurfaceMeshInterpolationFilename=(char**)malloc(sizeof(char)*objectRenderSurfaceMeshFileNum*string_length);
@@ -1430,6 +1436,7 @@ int main(int argc, char* argv[])
 	cout<<"2.fall off on the slope\n";
 	cout<<"3.\n";
 	cout<<"4.flower swing in the wind.\n";
+	cout<<"5.armadillo bend.\n";
 	cin>>test_case;
 	printf("Starting application.\n");
 	configFilename = string(configFilenameC);
@@ -1476,6 +1483,7 @@ void initFunction(int test_case_)
 				fixed_min_height=vertex_pos[1];
 			i=i+3;
 		}
+		std::cout<<"fixed_min_height:"<<fixed_min_height<<"--------------------\n";
 		//find the minimal position along y direction
 		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
 		{
@@ -1572,6 +1580,26 @@ void initFunction(int test_case_)
 		//integratorBase->SetState(u,velInitial);
 		integratorBaseSparse->SetExternalForces(f_ext);
 		integratorBase->DoTimestep();
+	}
+	else if(test_case==5)
+	{
+		//armadillo case: feet fixed, body bend
+		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+		{
+			Vec3d vert_before=initialSurfaceMesh->GetMesh()->getPosition(i);
+			//vert_before[0]=vert_before[1]=vert_before[2]=0.0;
+			Vec3d vert_after=*volumetricMesh->getVertex(i)/*volumetricSurfaceMesh->GetMesh()->getPosition(i)*/;
+			u[3*i]=vert_before[0]-vert_after[0];
+			u[3*i+1]=vert_before[1]-vert_after[1];
+			u[3*i+2]=vert_before[2]-vert_after[2];
+			velInitial[3*i]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;
+		}
+
+		for(unsigned int i=0;i<numFixedVertices;++i)
+		{
+			u[fixedDOFs[3*i+0]]=u[fixedDOFs[3*i+1]]=u[fixedDOFs[3*i+2]]=0.0;
+		}
+		integratorBase->SetState(u,velInitial);
 	}
 }
 void testStiffnessMatrix(void)

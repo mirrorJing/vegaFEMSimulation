@@ -930,6 +930,6 @@ TET
 701 219 220 223 168
 702 167 223 168 219
 *MATERIAL defaultMaterial
-ENU, 1000.0,5e+006,0.3
+ENU, 1000.0,5e+005,0.3
 *REGION
 allElements, defaultMaterial

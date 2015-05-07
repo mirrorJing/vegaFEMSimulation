@@ -88,7 +88,7 @@ char extraObjectsFileNameBase[string_length];
 int extraObjectsNum=0;
 
 //interpolation to embedded object render surface mesh
-int objectRenderSurfaceMeshFileNum=3;
+int objectRenderSurfaceMeshFileNum=1;
 int * objectRenderSurfaceMeshInterpolationElementVerticesNum;
 int ** objectRenderSurfaceMeshInterpolationVertices=NULL;
 double ** objectRenderSurfaceMeshInterpolationWeights=NULL;

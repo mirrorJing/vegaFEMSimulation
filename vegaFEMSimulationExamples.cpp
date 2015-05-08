@@ -88,7 +88,7 @@ char extraObjectsFileNameBase[string_length];
 int extraObjectsNum=0;
 
 //interpolation to embedded object render surface mesh
-int objectRenderSurfaceMeshFileNum=1;
+int objectRenderSurfaceMeshFileNum=1; 
 int * objectRenderSurfaceMeshInterpolationElementVerticesNum;
 int ** objectRenderSurfaceMeshInterpolationVertices=NULL;
 double ** objectRenderSurfaceMeshInterpolationWeights=NULL;
@@ -122,7 +122,6 @@ float dampingMassCoef=0.0;
 float dampingStiffnessCoef=0.0;
 float dampingLaplacianCoef = 0.0;
 float deformableObjectCompliance = 1.0;
-float baseFrequency = 1.0;
 int maxIterations;
 double epsilon;
 char backgroundColorString[string_length] = "220 220 220";
@@ -465,7 +464,7 @@ void outputFilesLoop(void)
 			}
 			integratorBase->SetState(u,velInitial);
 		}
-		if(deformableObject == COROTLINFEM)
+		if((deformableObject == COROTLINFEM)&&addGravity)
 		{
 			
 			for(int i=0;i<3*simulation_vertice_num;++i)
@@ -602,7 +601,7 @@ void idleFunction(void)
 			integratorBase->SetState(u,velInitial);
 		}
 
-		if(deformableObject == COROTLINFEM)
+		if((deformableObject == COROTLINFEM)&&addGravity)
 		{
 			for(int i=0;i<3*simulation_vertice_num;++i)
 			{
@@ -1329,7 +1328,6 @@ void initConfigurations()
 	configFile.addOption("dampingMassCoef", &dampingMassCoef);
 	configFile.addOption("dampingStiffnessCoef", &dampingStiffnessCoef);
 	configFile.addOption("deformableObjectCompliance", &deformableObjectCompliance);
-	configFile.addOption("baseFrequency", &baseFrequency);
 	configFile.addOptionOptional("dampingLaplacianCoef", &dampingLaplacianCoef, dampingLaplacianCoef);
 	configFile.addOptionOptional("newmarkBeta", &newmarkBeta, newmarkBeta);
 	configFile.addOptionOptional("newmarkGamma", &newmarkGamma, newmarkGamma);	

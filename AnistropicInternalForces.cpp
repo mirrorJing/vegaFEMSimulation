@@ -326,7 +326,7 @@ void AnisotropicInternalForces::ComputeForces(const double * vertexDisplacements
 		
 	}
 	//std::cout<<"\n";
-	//std::cout<<"f[3591]="<<forces[3591]<<","<<forces[3592]<<","<<forces[3593]<<"\n";
+//	std::cout<<"f[390]="<<forces[390]<<","<<forces[391]<<","<<forces[392]<<"\n";
 	if (add_gravity_)
 	{
 		for(int i=0; i<3*vert_num_; i++)
@@ -334,5 +334,5 @@ void AnisotropicInternalForces::ComputeForces(const double * vertexDisplacements
 			forces[i] -= gravity_force_[i];			
 		}
 	}
-	//std::cout<<"f+g[3591]="<<forces[3591]<<","<<forces[3592]<<","<<forces[3593]<<"\n";
+//	std::cout<<"f+g[3591]="<<forces[3591]<<","<<forces[3592]<<","<<forces[3593]<<"\n";
 }

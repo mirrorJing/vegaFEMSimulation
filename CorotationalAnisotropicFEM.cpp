@@ -650,6 +650,7 @@ void CorotationalAnisotropicFEM::ComputeForceAndStiffnessMatrixOfSubmesh(double 
 		// KElement = R * K * R^T
 		double RK[144],KElement[144]; // row-major
 		WarpMatrix(K_ele, R, RK, KElement);
+
 		if (stiffness_matrix != NULL)
 		{
 			int * rowIndex = row_[ele_idx];
@@ -769,6 +770,7 @@ void CorotationalAnisotropicFEM::ComputeForces(const double * vertexDisplacement
 		}
 
 	}
+
 	if (add_gravity_)
 	{
 		for(int i=0; i<3*vert_num_; i++)
@@ -776,4 +778,5 @@ void CorotationalAnisotropicFEM::ComputeForces(const double * vertexDisplacement
 			forces[i] -= gravity_force_[i];			
 		}
 	}
+
 }

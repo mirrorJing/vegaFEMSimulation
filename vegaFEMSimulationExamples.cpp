@@ -90,7 +90,7 @@ char extraObjectsFileNameBase[string_length];
 int extraObjectsNum=0;
 
 //interpolation to embedded object render surface mesh
-int objectRenderSurfaceMeshFileNum=1;
+int objectRenderSurfaceMeshFileNum=1; 
 int * objectRenderSurfaceMeshInterpolationElementVerticesNum;
 int ** objectRenderSurfaceMeshInterpolationVertices=NULL;
 double ** objectRenderSurfaceMeshInterpolationWeights=NULL;
@@ -604,7 +604,7 @@ void idleFunction(void)
 			integratorBase->SetState(u,velInitial);
 		}
 
-		if(deformableObject == COROTLINFEM)
+		if((deformableObject == COROTLINFEM)&&addGravity)
 		{
 			for(int i=0;i<3*simulation_vertice_num;++i)
 			{

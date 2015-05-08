@@ -8,7 +8,7 @@ bar0,mat0
 *SET bar1
 *INCLUDE bar1.txt
 *MATERIAL mat1
-ENU, 1000, 1e+006,0.3
+ENU, 1000, 2e+006,0.3
 *REGION
 bar1,mat1
 

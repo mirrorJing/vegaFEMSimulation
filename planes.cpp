@@ -111,13 +111,9 @@ void Planes::resolveContact(ObjMesh *mesh,double *vel)
             Vec3d vert_pos = mesh->getPosition(vert_index); 
 			Vec3d rel_vec=vert_pos-plane_center[plane_index];
 			double dist_vec=dot(rel_vec,unit_plane_normal);
-<<<<<<< HEAD
-			
-=======
             Vec3d rel_vec_tan = rel_vec - unit_plane_normal*dist_vec;
             if(len(rel_vec_tan) > 0.5*plane_size[plane_index])    //out of plane range, no collision
                 continue;
->>>>>>> 776af1149f967f16287f6c298618a540e552a64c
 			Vec3d vert_vel(0.0);
 			for(unsigned int i=0;i<3;++i)
 				vert_vel[i]=vel[3*vert_index+i];

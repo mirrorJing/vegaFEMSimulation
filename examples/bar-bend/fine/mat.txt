@@ -1,0 +1,27 @@
+*SET bar0
+*INCLUDE bar0.txt
+*MATERIAL mat0
+ENU, 1000, 1e+006,0.3
+*REGION
+bar0,mat0
+
+*SET bar1
+*INCLUDE bar1.txt
+*MATERIAL mat1
+ENU, 1000, 3e+006,0.3
+*REGION
+bar1,mat1
+
+*SET bar2
+*INCLUDE bar2.txt
+*MATERIAL mat2
+ENU, 1000, 5e+006,0.3
+*REGION
+bar2,mat2
+
+*SET bar_rest
+*INCLUDE bar_rest.txt
+*MATERIAL mat_rest
+ENU, 1000, 1e+006,0.3
+*REGION
+bar_rest,mat_rest

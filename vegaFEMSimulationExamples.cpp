@@ -56,6 +56,7 @@ int renderAxes=0;
 int renderWireframe=0;
 int renderVertices=0;
 int renderVelocity = 0;
+double renderVelocityScale = 1.0;
 int renderDeformableObject=1;
 int renderMaterialColors = 0;
 int useRealTimeNormals = 0;
@@ -89,7 +90,7 @@ char extraObjectsFileNameBase[string_length];
 int extraObjectsNum=0;
 
 //interpolation to embedded object render surface mesh
-int objectRenderSurfaceMeshFileNum=3;
+int objectRenderSurfaceMeshFileNum=1;
 int * objectRenderSurfaceMeshInterpolationElementVerticesNum;
 int ** objectRenderSurfaceMeshInterpolationVertices=NULL;
 double ** objectRenderSurfaceMeshInterpolationWeights=NULL;
@@ -124,7 +125,6 @@ float dampingMassCoef=0.0;
 float dampingStiffnessCoef=0.0;
 float dampingLaplacianCoef = 0.0;
 float deformableObjectCompliance = 1.0;
-float baseFrequency = 1.0;
 int maxIterations;
 double epsilon;
 char backgroundColorString[string_length] = "220 220 220";
@@ -322,7 +322,7 @@ void displayFunction(void)
 					if(timeStepCounter>=(simulation_frame_count/frame_rate)/timeStep)
 					{
 						vert_pos[j]=(*volumetricMesh->getVertex(i))[j]+integratorBase->Getq()[3*i+j];
-						vert_new_pos[j]=vert_pos[j]+integratorBase->Getqvel()[3*i+j];
+						vert_new_pos[j]=vert_pos[j]+integratorBase->Getqvel()[3*i+j]*renderVelocityScale;
 					}
 					else
 					{
@@ -467,7 +467,7 @@ void outputFilesLoop(void)
 			}
 			integratorBase->SetState(u,velInitial);
 		}
-		if(deformableObject == COROTLINFEM)
+		if((deformableObject == COROTLINFEM)&&addGravity)
 		{
 			
 			for(int i=0;i<3*simulation_vertice_num;++i)
@@ -690,6 +690,12 @@ void keyboardFunction(unsigned char key, int x, int y)
 		break;
 	case 'V':
 		renderVelocity = !renderVelocity;
+		break;
+	case 'i':
+		renderVelocityScale *= 2.0;
+		break;
+	case 'd':
+		renderVelocityScale *= 0.5;
 		break;
 	case 'm':
 		renderMaterialColors = !renderMaterialColors;
@@ -1335,7 +1341,6 @@ void initConfigurations()
 	configFile.addOption("dampingMassCoef", &dampingMassCoef);
 	configFile.addOption("dampingStiffnessCoef", &dampingStiffnessCoef);
 	configFile.addOption("deformableObjectCompliance", &deformableObjectCompliance);
-	configFile.addOption("baseFrequency", &baseFrequency);
 	configFile.addOptionOptional("dampingLaplacianCoef", &dampingLaplacianCoef, dampingLaplacianCoef);
 	configFile.addOptionOptional("newmarkBeta", &newmarkBeta, newmarkBeta);
 	configFile.addOptionOptional("newmarkGamma", &newmarkGamma, newmarkGamma);	
@@ -1436,7 +1441,7 @@ int main(int argc, char* argv[])
 	cout<<"2.fall off on the slope\n";
 	cout<<"3.\n";
 	cout<<"4.flower swing in the wind.\n";
-	cout<<"5.armadillo bend.\n";
+	cout<<"5.armadillo/bar bend.\n";
 	cin>>test_case;
 	printf("Starting application.\n");
 	configFilename = string(configFilenameC);
@@ -1483,7 +1488,6 @@ void initFunction(int test_case_)
 				fixed_min_height=vertex_pos[1];
 			i=i+3;
 		}
-		std::cout<<"fixed_min_height:"<<fixed_min_height<<"--------------------\n";
 		//find the minimal position along y direction
 		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
 		{
@@ -1579,15 +1583,14 @@ void initFunction(int test_case_)
 		}
 		//integratorBase->SetState(u,velInitial);
 		integratorBaseSparse->SetExternalForces(f_ext);
-		integratorBase->DoTimestep();
+		integratorBase->DoTimestep(); 
 	}
 	else if(test_case==5)
 	{
 		//armadillo case: feet fixed, body bend
-		for(unsigned int i=0;i<volumetricMesh->getNumVertices();++i)
+		for(unsigned int i=0;i<simulation_vertice_num;++i)
 		{
 			Vec3d vert_before=initialSurfaceMesh->GetMesh()->getPosition(i);
-			//vert_before[0]=vert_before[1]=vert_before[2]=0.0;
 			Vec3d vert_after=*volumetricMesh->getVertex(i)/*volumetricSurfaceMesh->GetMesh()->getPosition(i)*/;
 			u[3*i]=vert_before[0]-vert_after[0];
 			u[3*i+1]=vert_before[1]-vert_after[1];

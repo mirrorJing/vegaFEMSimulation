@@ -111,6 +111,7 @@ void Planes::resolveContact(ObjMesh *mesh,double *vel)
             Vec3d vert_pos = mesh->getPosition(vert_index); 
 			Vec3d rel_vec=vert_pos-plane_center[plane_index];
 			double dist_vec=dot(rel_vec,unit_plane_normal);
+			
 			Vec3d vert_vel(0.0);
 			for(unsigned int i=0;i<3;++i)
 				vert_vel[i]=vel[3*vert_index+i];

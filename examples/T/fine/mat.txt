@@ -1,0 +1,13 @@
+*SET T0
+*INCLUDE T0.txt
+*MATERIAL mat0
+ENU, 1000, 5e+007,0.3
+*REGION
+T0,mat0
+*SET T_rest
+*INCLUDE T_rest.txt
+*MATERIAL mat_rest
+ENU, 1000, 5e+006,0.3
+*REGION
+T_rest,mat_rest
+

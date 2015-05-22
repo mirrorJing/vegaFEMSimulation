@@ -164,6 +164,7 @@ int centralDifferencesTangentialDampingUpdateMode = 1;
 int positiveDefinite = 0;
 
 ForceModel * forceModel = NULL;
+IsotropicHyperelasticFEM * isotropicHyperelasticFEM;
 StVKInternalForces * stVKInternalForces = NULL;
 StVKStiffnessMatrix * stVKStiffnessMatrix = NULL;
 StVKForceModel * stVKForceModel = NULL;
@@ -621,6 +622,10 @@ void idleFunction(void)
 			timeStepCounter++;
 		}
 	}
+	/*for(unsigned int i=0;i<simulation_vertice_num;++i)
+	{
+		std::cout<<u[3*i+0]<<u[3*i+1]<<u[3*i+2]<<"\n";
+	}*/
 	memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);
 	volumetricSurfaceMesh->SetVertexDeformations(u);	
 
@@ -685,10 +690,10 @@ void keyboardFunction(unsigned char key, int x, int y)
 	case 's'://render the exterior surface of the volumetric mesh
 		renderVolumetricSurface=!renderVolumetricSurface;
 		break;
-	case 'v':
+	case 'V':
 		renderVertices = !renderVertices;
 		break;
-	case 'V':
+	case 'v':
 		renderVelocity = !renderVelocity;
 		break;
 	case 'i':
@@ -839,8 +844,8 @@ void addGravitySwitch(bool addGravity)
 {
 	if(deformableObject==STVK||deformableObject==LINFEM)
 		stVKInternalForces->SetGravity(addGravity);
-	/*if(deformableObject==INVERTIBLEFEM)
-		isotropicHyperelasticFEM->SetGravity(addGravity);*/
+	if(deformableObject==INVERTIBLEFEM)
+		isotropicHyperelasticFEM->SetGravity(addGravity);
 	if(deformableObject == ANISOTROPIC)
 		anisotropicInternalForces->SetGravity(addGravity);
 	if(addGravity)
@@ -1201,6 +1206,44 @@ void initSimulation()
 		LinearFEMForceModel * linearFEMForceModel = new LinearFEMForceModel(stVKInternalForces);
 		forceModel = linearFEMForceModel;
 	}
+
+	if (deformableObject == INVERTIBLEFEM)
+	{
+		TetMesh * tetMesh = dynamic_cast<TetMesh*>(volumetricMesh);
+		if (tetMesh == NULL)
+		{
+			printf("Error: the input mesh is not a tet mesh (Invertible FEM deformable model).\n");
+			exit(1);
+		}
+
+		IsotropicMaterial * isotropicMaterial = NULL;
+
+		// create the invertible material model
+		if (strcmp(invertibleMaterialString, "StVK") == 0)
+			invertibleMaterial = INV_STVK;
+
+		switch (invertibleMaterial)
+		{
+		case INV_STVK:
+			isotropicMaterial = new StVKIsotropicMaterial(tetMesh);
+			printf("Invertible material: StVK.\n");
+			break;
+		default:
+			printf("Error: invalid invertible material type.\n");
+			exit(1);
+			break;
+		}
+
+		// create the invertible FEM deformable model
+		if (numInternalForceThreads == 0)
+			isotropicHyperelasticFEM = new IsotropicHyperelasticFEM(tetMesh, isotropicMaterial, principalStretchThreshold, addGravity, g);
+		else
+			isotropicHyperelasticFEM = new IsotropicHyperelasticFEMMT(tetMesh, isotropicMaterial, principalStretchThreshold, addGravity, g, numInternalForceThreads);
+
+		// create force model for the invertible FEM class
+		IsotropicHyperelasticFEMForceModel * isotropicHyperelasticFEMForceModel = new IsotropicHyperelasticFEMForceModel(isotropicHyperelasticFEM);
+		forceModel = isotropicHyperelasticFEMForceModel;
+	}
 	// initialize the integrator
 	printf("Initializing the integrator, n = %d...\n", simulation_vertice_num);
 	printf("Solver type: %s\n", solverMethod);
@@ -1436,12 +1479,12 @@ int main(int argc, char* argv[])
 	cin>>output_mode;
 	test_case=0;
 	cout<<"Enter test case number:\n";
-	cout<<"0.gravity\n";
+	cout<<"0.without any other deformations,just with or without gravity\n";
 	cout<<"1.twist\n";
-	cout<<"2.fall off on the slope\n";
+	cout<<"2.fall off the designed slopes\n";
+	cout<<"5.Given an initial deformation surface mesh--for bar swing and flower swing.\n";
 	cout<<"3.\n";
 	cout<<"4.flower swing in the wind.\n";
-	cout<<"5.armadillo/bar bend.\n";
 	cin>>test_case;
 	printf("Starting application.\n");
 	configFilename = string(configFilenameC);
@@ -1587,7 +1630,7 @@ void initFunction(int test_case_)
 	}
 	else if(test_case==5)
 	{
-		//armadillo case: feet fixed, body bend
+		//models bend in the initial position
 		for(unsigned int i=0;i<simulation_vertice_num;++i)
 		{
 			Vec3d vert_before=initialSurfaceMesh->GetMesh()->getPosition(i);
@@ -1596,12 +1639,14 @@ void initFunction(int test_case_)
 			u[3*i+1]=vert_before[1]-vert_after[1];
 			u[3*i+2]=vert_before[2]-vert_after[2];
 			velInitial[3*i]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;
+			
 		}
 
 		for(unsigned int i=0;i<numFixedVertices;++i)
 		{
 			u[fixedDOFs[3*i+0]]=u[fixedDOFs[3*i+1]]=u[fixedDOFs[3*i+2]]=0.0;
 		}
+
 		integratorBase->SetState(u,velInitial);
 	}
 }

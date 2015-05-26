@@ -56,6 +56,7 @@ int renderAxes=0;
 int renderWireframe=0;
 int renderVertices=0;
 int renderVelocity = 0;
+double renderVelocityScale = 1.0;
 int renderDeformableObject=1;
 int renderMaterialColors = 0;
 int useRealTimeNormals = 0;
@@ -65,6 +66,7 @@ int renderSprings = 0;
 int lockScene=0;
 int pauseSimulation=1;
 Lighting * lighting = NULL;
+SceneObjectDeformable * initialSurfaceMesh = NULL;
 SceneObjectDeformable * volumetricSurfaceMesh = NULL;
 SceneObjectDeformable * renderingMesh = NULL;
 SceneObjectDeformable ** objectRenderSurfaceMesh = NULL;
@@ -101,6 +103,7 @@ char massMatrixFilename[string_length];
 char invertibleMaterialString[string_length] = "__none";
 char initialPositionFilename[string_length];
 char initialVelocityFilename[string_length];
+char initialSurfaceMeshFilename[string_length];
 char forceLoadsFilename[string_length];
 char elasticTensorFilename[string_length];
 //outputFile
@@ -161,6 +164,7 @@ int centralDifferencesTangentialDampingUpdateMode = 1;
 int positiveDefinite = 0;
 
 ForceModel * forceModel = NULL;
+IsotropicHyperelasticFEM * isotropicHyperelasticFEM;
 StVKInternalForces * stVKInternalForces = NULL;
 StVKStiffnessMatrix * stVKStiffnessMatrix = NULL;
 StVKForceModel * stVKForceModel = NULL;
@@ -319,7 +323,7 @@ void displayFunction(void)
 					if(timeStepCounter>=(simulation_frame_count/frame_rate)/timeStep)
 					{
 						vert_pos[j]=(*volumetricMesh->getVertex(i))[j]+integratorBase->Getq()[3*i+j];
-						vert_new_pos[j]=vert_pos[j]+integratorBase->Getqvel()[3*i+j];
+						vert_new_pos[j]=vert_pos[j]+integratorBase->Getqvel()[3*i+j]*renderVelocityScale;
 					}
 					else
 					{
@@ -618,6 +622,10 @@ void idleFunction(void)
 			timeStepCounter++;
 		}
 	}
+	/*for(unsigned int i=0;i<simulation_vertice_num;++i)
+	{
+		std::cout<<u[3*i+0]<<u[3*i+1]<<u[3*i+2]<<"\n";
+	}*/
 	memcpy(u, integratorBase->Getq(), sizeof(double) * 3 * simulation_vertice_num);
 	volumetricSurfaceMesh->SetVertexDeformations(u);	
 
@@ -682,11 +690,17 @@ void keyboardFunction(unsigned char key, int x, int y)
 	case 's'://render the exterior surface of the volumetric mesh
 		renderVolumetricSurface=!renderVolumetricSurface;
 		break;
-	case 'v':
+	case 'V':
 		renderVertices = !renderVertices;
 		break;
-	case 'V':
+	case 'v':
 		renderVelocity = !renderVelocity;
+		break;
+	case 'i':
+		renderVelocityScale *= 2.0;
+		break;
+	case 'd':
+		renderVelocityScale *= 0.5;
 		break;
 	case 'm':
 		renderMaterialColors = !renderMaterialColors;
@@ -830,8 +844,8 @@ void addGravitySwitch(bool addGravity)
 {
 	if(deformableObject==STVK||deformableObject==LINFEM)
 		stVKInternalForces->SetGravity(addGravity);
-	/*if(deformableObject==INVERTIBLEFEM)
-		isotropicHyperelasticFEM->SetGravity(addGravity);*/
+	if(deformableObject==INVERTIBLEFEM)
+		isotropicHyperelasticFEM->SetGravity(addGravity);
 	if(deformableObject == ANISOTROPIC)
 		anisotropicInternalForces->SetGravity(addGravity);
 	if(addGravity)
@@ -904,6 +918,11 @@ void initSimulation()
 	{
 		printf("Error: no deformable model specified.\n");
 		exit(1);
+	}
+	//load initial position mesh
+	if(strcmp(initialSurfaceMeshFilename,"__none")!=0)
+	{
+		initialSurfaceMesh =  new SceneObjectDeformable(initialSurfaceMeshFilename);
 	}
 	// load mesh
 	if ((deformableObject == STVK) || (deformableObject == ANISOTROPIC) || (deformableObject == COROTLINFEM) || (deformableObject == COROTANISTROPIC) || (deformableObject == INVERTIBLEFEM))
@@ -1187,6 +1206,44 @@ void initSimulation()
 		LinearFEMForceModel * linearFEMForceModel = new LinearFEMForceModel(stVKInternalForces);
 		forceModel = linearFEMForceModel;
 	}
+
+	if (deformableObject == INVERTIBLEFEM)
+	{
+		TetMesh * tetMesh = dynamic_cast<TetMesh*>(volumetricMesh);
+		if (tetMesh == NULL)
+		{
+			printf("Error: the input mesh is not a tet mesh (Invertible FEM deformable model).\n");
+			exit(1);
+		}
+
+		IsotropicMaterial * isotropicMaterial = NULL;
+
+		// create the invertible material model
+		if (strcmp(invertibleMaterialString, "StVK") == 0)
+			invertibleMaterial = INV_STVK;
+
+		switch (invertibleMaterial)
+		{
+		case INV_STVK:
+			isotropicMaterial = new StVKIsotropicMaterial(tetMesh);
+			printf("Invertible material: StVK.\n");
+			break;
+		default:
+			printf("Error: invalid invertible material type.\n");
+			exit(1);
+			break;
+		}
+
+		// create the invertible FEM deformable model
+		if (numInternalForceThreads == 0)
+			isotropicHyperelasticFEM = new IsotropicHyperelasticFEM(tetMesh, isotropicMaterial, principalStretchThreshold, addGravity, g);
+		else
+			isotropicHyperelasticFEM = new IsotropicHyperelasticFEMMT(tetMesh, isotropicMaterial, principalStretchThreshold, addGravity, g, numInternalForceThreads);
+
+		// create force model for the invertible FEM class
+		IsotropicHyperelasticFEMForceModel * isotropicHyperelasticFEMForceModel = new IsotropicHyperelasticFEMForceModel(isotropicHyperelasticFEM);
+		forceModel = isotropicHyperelasticFEMForceModel;
+	}
 	// initialize the integrator
 	printf("Initializing the integrator, n = %d...\n", simulation_vertice_num);
 	printf("Solver type: %s\n", solverMethod);
@@ -1280,10 +1337,9 @@ void initConfigurations()
 	configFile.addOptionOptional("timestepPerOutputFile",&timestepPerOutputFile,timestepPerOutputFile);
 	configFile.addOptionOptional("saveMeshToFile",&saveMeshToFile,saveMeshToFile); 
 	configFile.addOptionOptional("volumetricMeshFilename", volumetricSurfaceMeshFilename, "__none");
+	configFile.addOptionOptional("initialSurfaceMeshFilename",initialSurfaceMeshFilename,"__none");
 	configFile.addOptionOptional("renderingMeshFilename", renderingMeshFilename, "__none");
-	std::cout<<"-----------------------------------------\n";
 	std::cout<<"renderingMeshFilename:"<<renderingMeshFilename<<"\n";
-	std::cout<<"-----------------------------------------\n";
 	configFile.addOptionOptional("objectRenderSurfaceMeshFileNum", &objectRenderSurfaceMeshFileNum, objectRenderSurfaceMeshFileNum);
 	objectRenderSurfaceMeshFilename=(char**)malloc(sizeof(char)*objectRenderSurfaceMeshFileNum*string_length);
 	objectRenderSurfaceMeshInterpolationFilename=(char**)malloc(sizeof(char)*objectRenderSurfaceMeshFileNum*string_length);
@@ -1423,9 +1479,10 @@ int main(int argc, char* argv[])
 	cin>>output_mode;
 	test_case=0;
 	cout<<"Enter test case number:\n";
-	cout<<"0.gravity\n";
+	cout<<"0.without any other deformations,just with or without gravity\n";
 	cout<<"1.twist\n";
-	cout<<"2.fall off on the slope\n";
+	cout<<"2.fall off the designed slopes\n";
+	cout<<"5.Given an initial deformation surface mesh--for bar swing and flower swing.\n";
 	cout<<"3.\n";
 	cout<<"4.flower swing in the wind.\n";
 	cin>>test_case;
@@ -1569,7 +1626,178 @@ void initFunction(int test_case_)
 		}
 		//integratorBase->SetState(u,velInitial);
 		integratorBaseSparse->SetExternalForces(f_ext);
-		integratorBase->DoTimestep();
+		integratorBase->DoTimestep(); 
+	}
+	else if(test_case==5)
+	{
+		//models bend in the initial position
+		for(unsigned int i=0;i<simulation_vertice_num;++i)
+		{
+			Vec3d vert_before=initialSurfaceMesh->GetMesh()->getPosition(i);
+			Vec3d vert_after=*volumetricMesh->getVertex(i);
+			u[3*i]=vert_before[0]-vert_after[0];
+			u[3*i+1]=vert_before[1]-vert_after[1];
+			u[3*i+2]=vert_before[2]-vert_after[2];
+			velInitial[3*i]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;			
+		}
+		for(unsigned int i=0;i<numFixedVertices;++i)
+		{
+			u[fixedDOFs[3*i+0]]=u[fixedDOFs[3*i+1]]=u[fixedDOFs[3*i+2]]=0.0;
+		}
+
+		integratorBase->SetState(u,velInitial);
+	}
+	else if(test_case==6)
+	{
+		//set different material propertices
+		unsigned int setNum=volumetricMesh->getNumSets();
+		unsigned int numMaterials=volumetricMesh->getNumMaterials();
+		VolumetricMesh::Material ** materials;
+		materials = (VolumetricMesh::Material**) malloc (sizeof(VolumetricMesh::Material*) * numMaterials);
+		double *init_E=NULL;
+		init_E = (double*)malloc(sizeof(double)*numMaterials);
+		double *vert_youngs_modulus=NULL;
+		vert_youngs_modulus=(double*)malloc(sizeof(double)*simulation_vertice_num);
+		double *vert_color_R=NULL, *vert_color_G=NULL, *vert_color_B=NULL;
+		std::cout<<simulation_vertice_num<<"--------\n";
+		vert_color_R=(double*)malloc(sizeof(double)*simulation_vertice_num);
+		vert_color_G=(double*)malloc(sizeof(double)*simulation_vertice_num);
+		vert_color_B=(double*)malloc(sizeof(double)*simulation_vertice_num);
+		
+		double *ele_youngs_modulus=NULL;
+		ele_youngs_modulus=(double *) malloc (sizeof(double)*volumetricMesh->getNumElements());
+		for(unsigned int material_index=0;material_index<numMaterials;++material_index)
+		{
+			materials[material_index]=volumetricMesh->getMaterial(material_index);
+			VolumetricMesh::ENuMaterial * init_material=downcastENuMaterial(materials[material_index]);
+			init_E[material_index] = init_material->getE();
+		}
+		//set material for each vertex
+		double y_min=-0.37976,y_max=0.48449;
+		double p1_x_min=-0.31921,p1_x_max=-0.042;
+		double p2_x_min=-0.46597,p2_x_max=-0.09092;
+		double p3_x_min=-0.042,p3_x_max=0.28413;
+		double p4_x_min=0.28413,p4_x_max=0.4635;
+		double p5_x_min=0.07214,p5_x_max=0.52872;
+		for(unsigned int i=1;i<volumetricMesh->getNumSets();++i)
+		{
+			VolumetricMesh::Set * element_set=volumetricMesh->getSet(i);
+			std::set<int> elements;
+			element_set->getElements(elements);
+			for(set<int>::iterator iter=elements.begin();iter!=elements.end();++iter)
+			{
+				//std::cout<<*iter<<",,,,\n";
+				ele_youngs_modulus[*iter-1]=0.0;
+				for(unsigned int j=0;j<volumetricMesh->getNumElementVertices();++j)
+				{
+					unsigned int vert_index=volumetricMesh->getVertexIndex(*iter-1,j);
+					Vec3d vert_pos=*volumetricMesh->getVertex(*iter-1,j);
+					if(i==1)
+					{
+						vert_youngs_modulus[vert_index]=fabs((init_E[0]-init_E[1])*(vert_pos[1]-y_min)/(y_max-y_min));
+						vert_color_R[vert_index]=1.0-fabs(1.0*(vert_pos[1]-y_min)/(y_max-y_min));
+						vert_color_G[vert_index]=0.0;
+						vert_color_B[vert_index]=fabs(1.0*(vert_pos[1]-y_min)/(y_max-y_min));
+					}
+					/*std::cout<<"!!!!:"<<init_E[0]<<":"<<init_E[1]<<":"<<vert_pos[1]<<":"<<y_min<<":"<<y_max<<":"<<"\n";
+					std::cout<<fabs((init_E[0]-init_E[1])*(vert_pos[1]-y_min)/(y_max-y_min))<<"\n";
+					std::cout<<"---------------------------------------------------------"<<"\n";
+					std::cout<<1.0-fabs(1.0*(vert_pos[1]-y_min)/(y_max-y_min))<<"\n";
+					std::cout<<fabs(1.0*(vert_pos[1]-y_min)/(y_max-y_min))<<"\n";
+					std::cout<<vert_index<<":"<<vert_youngs_modulus[vert_index]<<"--"<<vert_color_R[vert_index]<<"--"<<vert_color_G[vert_index]<<"--"<<vert_color_B[vert_index]<<"\n";
+					getchar();*/
+					if(i==2)
+					{
+						vert_youngs_modulus[vert_index]=fabs((init_E[1]-init_E[6])*(vert_pos[0]-p1_x_max)/(p1_x_max-p1_x_min));
+						vert_color_B[vert_index]=1.0-fabs(1.0*(vert_pos[0]-p1_x_max)/(p1_x_max-p1_x_min));
+						vert_color_R[vert_index]=0.0;
+						vert_color_G[vert_index]=fabs(1.0*(vert_pos[0]-p1_x_max)/(p1_x_max-p1_x_min));
+					}
+					if(i==3)
+					{
+						vert_youngs_modulus[vert_index]=fabs((init_E[1]-init_E[6])*(vert_pos[0]-p2_x_max)/(p2_x_max-p2_x_min));
+						vert_color_B[vert_index]=1.0-fabs(1.0*(vert_pos[0]-p2_x_max)/(p2_x_max-p2_x_min));
+						vert_color_R[vert_index]=0.0;
+						vert_color_G[vert_index]=fabs(1.0*(vert_pos[0]-p2_x_max)/(p2_x_max-p2_x_min));
+					}
+					if(i==4)
+					{
+						vert_youngs_modulus[vert_index]=fabs((init_E[1]-init_E[6])*(vert_pos[0]-p3_x_min)/(p3_x_max-p3_x_min));
+						vert_color_B[vert_index]=1.0-fabs(1.0*(vert_pos[0]-p3_x_min)/(p3_x_max-p3_x_min));
+						vert_color_R[vert_index]=0.0;
+						vert_color_G[vert_index]=fabs(1.0*(vert_pos[0]-p3_x_min)/(p3_x_max-p3_x_min));
+					}
+					if(i==5)
+					{
+						vert_youngs_modulus[vert_index]=fabs((init_E[1]-init_E[6])*(vert_pos[0]-p4_x_min)/(p4_x_max-p4_x_min));
+						vert_color_B[vert_index]=1.0-fabs(1.0*(vert_pos[0]-p4_x_min)/(p4_x_max-p4_x_min));
+						vert_color_R[vert_index]=0.0;
+						vert_color_G[vert_index]=fabs(1.0*(vert_pos[0]-p4_x_min)/(p4_x_max-p4_x_min));
+					}
+					if(i==6)
+					{
+						vert_youngs_modulus[vert_index]=fabs((init_E[1]-init_E[6])*(vert_pos[0]-p5_x_min)/(p5_x_max-p5_x_min));
+						vert_color_B[vert_index]=1.0-fabs(1.0*(vert_pos[0]-p5_x_min)/(p5_x_max-p5_x_min));
+						vert_color_R[vert_index]=0.0;
+						vert_color_G[vert_index]=fabs(1.0*(vert_pos[0]-p5_x_min)/(p5_x_max-p5_x_min));
+					}
+					if(i==7)
+					{
+						//vert_youngs_modulus[vert_index]=fabs((init_E[5]-init_E[1])*(vert_pos[0]-p5_x_min)/(p5_x_max-p5_x_min));
+						vert_color_R[vert_index]=0.0;
+						vert_color_G[vert_index]=1.0;
+						vert_color_B[vert_index]=0.0;
+						vert_youngs_modulus[vert_index]=init_E[6];
+					}
+
+					ele_youngs_modulus[*iter-1]+=vert_youngs_modulus[vert_index];
+				//	std::cout<<"ele+:"<<vert_youngs_modulus[vert_index]<<","<<ele_youngs_modulus[*iter-1]<<"\n";
+				}
+
+				ele_youngs_modulus[*iter-1]/=(volumetricMesh->getNumElementVertices());
+			/*	std::cout<<"ele/:"<<ele_youngs_modulus[*iter-1]<<"\n";
+				getchar();*/
+				VolumetricMesh::ENuMaterial * new_material=downcastENuMaterial(volumetricMesh->getElementMaterial(*iter-1));
+				new_material->setE(ele_youngs_modulus[*iter-1]);
+			}
+			std::cout<<"\n";
+
+		}
+		//store vertex color maps
+		string output_file_name="examples/plant/plant-colormap.txt";
+		std::ofstream write_file(output_file_name);
+		for(unsigned int i=0;i<simulation_vertice_num;++i)
+		{
+			write_file<<vert_color_R[i]<<" "<<vert_color_G[i]<<" "<<vert_color_B[i]<<std::endl;			
+		}
+		write_file.close();
+		//store new youngs_modulus for each element
+		string output_vertex_youngs="examples/plant/new_youngs.txt";
+		std::ofstream write_file1(output_vertex_youngs);
+		for(unsigned int i=0;i<volumetricMesh->getNumElements();++i)
+		{
+			write_file1<<ele_youngs_modulus[i]<<" ";	
+			if((i%8==0)&&(i>6))
+				write_file1<<std::endl;
+		}
+		write_file1.close();
+		//set initial deformed position
+		
+		for(unsigned int i=0;i<simulation_vertice_num;++i)
+		{
+			Vec3d vert_before=initialSurfaceMesh->GetMesh()->getPosition(i);
+			Vec3d vert_after=*volumetricMesh->getVertex(i);
+			u[3*i]=vert_before[0]-vert_after[0];
+			u[3*i+1]=vert_before[1]-vert_after[1];
+			u[3*i+2]=vert_before[2]-vert_after[2];
+			velInitial[3*i]=velInitial[3*i+1]=velInitial[3*i+2]=0.0;			
+		}
+		for(unsigned int i=0;i<numFixedVertices;++i)
+		{
+			u[fixedDOFs[3*i+0]]=u[fixedDOFs[3*i+1]]=u[fixedDOFs[3*i+2]]=0.0;
+		}
+		integratorBase->SetState(u,velInitial);
+		
 	}
 }
 void testStiffnessMatrix(void)

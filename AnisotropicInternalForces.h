@@ -38,7 +38,7 @@ public:
   virtual ~AnisotropicInternalForces();
 
   void loadElasticTensorOnCoaseMesh(const std::string &elastic_tensor_file_name);  //load elastic_tensor file and store the value in the coarse_mesh_elastic_tensor
-  Mat3d getInistialDisplacementMatrixOnEachElement(unsigned int ele_idx) const;
+  Mat3d getInitialDisplacementMatrixOnEachElement(unsigned int ele_idx) const;
   //the displacement is 3n*1 vector, n is the vertex number
   std::vector<Mat3d> getCurrentDisplacementMatrixOnAllElements(const double *vert_displacement) const;
   Mat3d getDeformationGradient(const Mat3d init_dis, const Mat3d current_dis) const;
@@ -54,6 +54,9 @@ public:
   inline VolumetricMesh * GetVolumetricMesh() { return volumetric_mesh_; }
 protected:
 	void InitGravity(); // aux function
+    int ModifiedSVD(Mat3d & F, Mat3d & U, Vec3d & Fhat, Mat3d & V) const;    //modified SVD for inversion handling
+    // given a vector, find a unit vector that is orthogonal to it
+    void FindOrthonormalVector(Vec3d & v, Vec3d & result) const;
 protected:
 	VolumetricMesh * volumetric_mesh_;
 	double *** ele_elastic_tensor_vector_;

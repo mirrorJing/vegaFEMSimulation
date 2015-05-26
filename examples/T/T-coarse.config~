@@ -2,14 +2,14 @@
 examples/T/coarse/T-coarse.veg
 
 *solver
-implicitBackwardEuler
+#implicitBackwardEuler
 #implicitNewmark
 #symplecticEuler
-#Euler
+Euler
 
 *deformableObjectMethod
-#Anisotropic
-StVK
+Anisotropic
+#StVK
 
 *renderingMeshFilename
 examples/T/coarse/T-coarse-surface-mesh.obj

@@ -6,8 +6,8 @@
 #define _ANISOTROPICFORCEMODEL_H_
 
 #include "forceModel.h"
-#include "AnistropicInternalForces.h"
-#include "AnistropicStiffnessMatrix.h"
+#include "AnisotropicInternalForces.h"
+#include "AnisotropicStiffnessMatrix.h"
 
 class AnisotropicForceModel : virtual public ForceModel
 {

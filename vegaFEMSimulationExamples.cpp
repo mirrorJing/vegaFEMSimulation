@@ -11,6 +11,7 @@
  *
  */
 
+#include <iomanip>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -1646,6 +1647,9 @@ void initFunction(int test_case_)
 		}
 
 		integratorBase->SetState(u,velInitial);
+        // //test stiffness matrix
+        // testStiffnessMatrix();
+        // getchar();
 	}
 	else if(test_case==6)
 	{
@@ -1803,77 +1807,54 @@ void initFunction(int test_case_)
 void testStiffnessMatrix(void)
 {
 	//test K
-	double *u1,*du,*f1,*f0,*multi_k_du,*error_value;
-	u1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-	du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-	f1=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-	f0=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-	multi_k_du=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-	error_value=(double*)malloc(sizeof(double)*3*simulation_vertice_num);
-	SparseMatrix *K0,*K1;
-	double f1_max,f0_max,multi_k_du_max;
-	forceModel->GetTangentStiffnessMatrixTopology(&K0);
-	forceModel->GetTangentStiffnessMatrixTopology(&K1);
-	double max_error=0.0;		
-	for(unsigned int l=0;l<simulation_vertice_num;++l)
-	{
-		Vec3d vert_pos=*volumetricMesh->getVertex(l);
-		if(vert_pos[0]>0)
-			u[3*l]=-0.1;
-		else
-			u[3*l]=0.1;
-		if(vert_pos[1]>0)
-			u[3*l+1]=0.1;
-		else
-			u[3*l+1]=-0.2;
-		if(vert_pos[2]>0)
-			u[3*l+2]=0.1;
-		else
-			u[3*l+2]=-0.3;
-	}	
-	double ran_numf=0.0;
-	srand((unsigned)time(0));
-	for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-	{
-		du[l]=(1.0e-5)*(rand()/(double)(RAND_MAX));
-		error_value[l]=0.0;
-	}
-	forceModel->GetForceAndMatrix(u,f0,K0);
-	K0->MultiplyVector(du,multi_k_du);
-	for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-	{
-		u1[l]=u[l]+du[l];
-	}
-	forceModel->GetForceAndMatrix(u1,f1,K1);
-
-	for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-	{
-		error_value[l]=f1[l]-f0[l]-multi_k_du[l];
-	}
-
-	for(unsigned int l=0;l<3*simulation_vertice_num;++l)
-	{
-		if(fabs(f1[l])>1.0e-8)
-		{
-			if(fabs(error_value[l]/f1[l])>max_error);
-			{
-				max_error=fabs(error_value[l]/f1[l]);
-				f1_max=f1[l];
-				f0_max=f0[l];
-				multi_k_du_max=multi_k_du[l];
-			}
-		}
-		else
-		{
-			std::cout<<"!";
-			//max_error=0.0;
-		}
-	}
-	std::cout<<max_error<<"--f1="<<f1_max<<"--f0="<<f0_max<<"--multi_k_du_max="<<multi_k_du_max<<"----------------------------";
-	delete [] u1;
-	delete [] du;
-	delete [] f0;
-	delete [] f1;
-	delete [] multi_k_du;
-	delete [] error_value;
+    double *u = new double[3*simulation_vertice_num];
+    double *u_pert = new double[3*simulation_vertice_num];
+    double *f = new double[3*simulation_vertice_num];
+    double *f_pos = new double[3*simulation_vertice_num];
+    double *f_neg = new double[3*simulation_vertice_num];
+    srand((unsigned)time(0));
+    //randomly generate displacement in range [0.1,1]
+    for(unsigned int i = 0; i < 3*simulation_vertice_num; ++i)
+        u[i] = (1+rand()%10)/10.0;
+    forceModel->GetInternalForce(u,f);
+	SparseMatrix *K;
+	forceModel->GetTangentStiffnessMatrixTopology(&K);
+    forceModel->GetTangentStiffnessMatrix(u,K);
+    //perturb a little bit
+    for(unsigned int i = 0; i < 3*simulation_vertice_num; ++i)
+    {
+        u_pert[i] = (1+rand()%10)/1.0e7;
+        u[i] += u_pert[i];
+    }
+    forceModel->GetInternalForce(u,f_pos);
+    for(unsigned int i = 0; i < 3*simulation_vertice_num; ++i)
+    {
+        u_pert[i] *=2.0;
+        u[i] -= u_pert[i];
+    }
+    forceModel->GetInternalForce(u,f_neg);
+    double *K_dx = new double[3*simulation_vertice_num];
+    K->MultiplyVector(u_pert,K_dx);
+    double max_rel_error = 1000;
+    double df,k_dx;
+    for(unsigned int i = 0; i < 3*simulation_vertice_num; ++i)
+    {
+        double rel_error = fabs((f_pos[i]-f_neg[i]-K_dx[i])/K_dx[i]);
+        if(rel_error < max_rel_error)
+        {
+            df = f_pos[i] - f_neg[i];
+            k_dx = K_dx[i];
+            max_rel_error = rel_error;
+        }
+    }
+    std::cout<<"Entry with maximum relative error: \n";
+    std::cout<<"df: "<<setprecision(15)<<df<<"\n";
+    std::cout<<"k*dx: "<<setprecision(15)<<k_dx<<"\n";
+    std::cout<<"rel_error: "<<max_rel_error<<"\n";
+    delete[] u;
+    delete[] u_pert;
+    delete[] f;
+    delete[] f_pos;
+    delete[] f_neg;
+    delete[] K_dx;
 }

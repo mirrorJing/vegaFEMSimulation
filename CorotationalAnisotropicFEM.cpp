@@ -441,9 +441,9 @@ Mat3d CorotationalAnisotropicFEM::secondPiolaKirchhoffStress(unsigned int ele_id
 	{
 		result_matrix[i][i]=result[i];
 	}
-	result_matrix[1][2]=result_matrix[2][1]=0.5*result[3];
-	result_matrix[0][2]=result_matrix[2][0]=0.5*result[4];
-	result_matrix[0][1]=result_matrix[1][0]=0.5*result[5];
+	result_matrix[1][2]=result_matrix[2][1]=result[3];
+	result_matrix[0][2]=result_matrix[2][0]=result[4];
+	result_matrix[0][1]=result_matrix[1][0]=result[5];
 	delete [] strain_tensor_vector;
 	free(result);
 	return result_matrix;
@@ -474,9 +474,9 @@ Mat3d CorotationalAnisotropicFEM::firstPiolaKirchhoffStressDerivative(unsigned i
 	{
 		elastic_multiply_strain_matrix[i][i]=elastic_multiply_strain[i];
 	}
-	elastic_multiply_strain_matrix[1][2]=elastic_multiply_strain_matrix[2][1]=0.5*elastic_multiply_strain[3];
-	elastic_multiply_strain_matrix[0][2]=elastic_multiply_strain_matrix[2][0]=0.5*elastic_multiply_strain[4];
-	elastic_multiply_strain_matrix[0][1]=elastic_multiply_strain_matrix[1][0]=0.5*elastic_multiply_strain[5];
+	elastic_multiply_strain_matrix[1][2]=elastic_multiply_strain_matrix[2][1]=elastic_multiply_strain[3];
+	elastic_multiply_strain_matrix[0][2]=elastic_multiply_strain_matrix[2][0]=elastic_multiply_strain[4];
+	elastic_multiply_strain_matrix[0][1]=elastic_multiply_strain_matrix[1][0]=elastic_multiply_strain[5];
 	const Mat3d F_derivative=getDeformationGradientDerivative(ele_idx,vert_idx,vert_idx_dim);	
 	//compute C*dE/dx_j^k and convert a 6*1 vector to a 3*3 matrix
 	double * elastic_multiply_strain_derivative;
@@ -500,9 +500,9 @@ Mat3d CorotationalAnisotropicFEM::firstPiolaKirchhoffStressDerivative(unsigned i
 	{
 		elastic_multiply_strain_derivative_matrix[i][i]=elastic_multiply_strain_derivative[i];
 	}
-	elastic_multiply_strain_derivative_matrix[1][2]=elastic_multiply_strain_derivative_matrix[2][1]=0.5*elastic_multiply_strain_derivative[3];
-	elastic_multiply_strain_derivative_matrix[0][2]=elastic_multiply_strain_derivative_matrix[2][0]=0.5*elastic_multiply_strain_derivative[4];
-	elastic_multiply_strain_derivative_matrix[0][1]=elastic_multiply_strain_derivative_matrix[1][0]=0.5*elastic_multiply_strain_derivative[5];
+	elastic_multiply_strain_derivative_matrix[1][2]=elastic_multiply_strain_derivative_matrix[2][1]=elastic_multiply_strain_derivative[3];
+	elastic_multiply_strain_derivative_matrix[0][2]=elastic_multiply_strain_derivative_matrix[2][0]=elastic_multiply_strain_derivative[4];
+	elastic_multiply_strain_derivative_matrix[0][1]=elastic_multiply_strain_derivative_matrix[1][0]=elastic_multiply_strain_derivative[5];
 	Mat3d result_matrix(0.0);
 	result_matrix=F_derivative*elastic_multiply_strain_matrix;
 	result_matrix+=F*elastic_multiply_strain_derivative_matrix;

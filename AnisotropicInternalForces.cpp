@@ -7,7 +7,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include "AnistropicInternalForces.h"
+#include "AnisotropicInternalForces.h"
 #include "volumetricMesh.h"
 #include "vec3d.h"
 #include "mat3d.h"
@@ -52,6 +52,209 @@ void AnisotropicInternalForces::InitGravity()
 		volumetric_mesh_->computeGravity(gravity_force_, g_);
 	}  
 }
+
+int AnisotropicInternalForces::ModifiedSVD(Mat3d & F, Mat3d & U, Vec3d & Fhat, Mat3d & V) const
+{
+    // The code handles the following necessary special situations (see the code below) :
+
+    //---------------------------------------------------------
+    // 1. det(V) == -1
+    //    - simply multiply a column of V by -1
+    //---------------------------------------------------------
+    // 2. An entry of Fhat is near zero
+    //---------------------------------------------------------
+    // 3. Tet is inverted.
+    //    - check if det(U) == -1
+    //    - If yes, then negate the minimal element of Fhat
+    //      and the corresponding column of U
+    //---------------------------------------------------------
+
+    double modifiedSVD_singularValue_eps = 1e-8;
+
+    // form F^T F and do eigendecomposition
+    Mat3d normalEq = trans(F) * F;
+    Vec3d eigenValues;
+    Vec3d eigenVectors[3];
+
+    // note that normalEq is changed after calling eigen_sym
+    eigen_sym(normalEq, eigenValues, eigenVectors);
+
+    V.set(eigenVectors[0][0], eigenVectors[1][0], eigenVectors[2][0],
+          eigenVectors[0][1], eigenVectors[1][1], eigenVectors[2][1],
+          eigenVectors[0][2], eigenVectors[1][2], eigenVectors[2][2]);
+    /*
+      printf("--- original V ---\n");
+      V.print();
+      printf("--- eigenValues ---\n");
+      printf("%G %G %G\n", eigenValues[0], eigenValues[1], eigenValues[2]);
+    */
+
+    // Handle situation:
+    // 1. det(V) == -1
+    //    - simply multiply a column of V by -1
+    if (det(V) < 0.0)
+    {
+        // convert V into a rotation (multiply column 1 by -1)
+        V[0][0] *= -1.0;
+        V[1][0] *= -1.0;
+        V[2][0] *= -1.0;
+    }
+
+    Fhat[0] = (eigenValues[0] > 0.0) ? sqrt(eigenValues[0]) : 0.0;
+    Fhat[1] = (eigenValues[1] > 0.0) ? sqrt(eigenValues[1]) : 0.0;
+    Fhat[2] = (eigenValues[2] > 0.0) ? sqrt(eigenValues[2]) : 0.0;
+
+    //printf("--- Fhat ---\n");
+    //printf("%G %G %G\n", Fhat[0][0], Fhat[1][1], Fhat[2][2]);
+
+    // compute inverse of singular values
+    // also check if singular values are close to zero
+    Vec3d FhatInverse;
+    FhatInverse[0] = (Fhat[0] > modifiedSVD_singularValue_eps) ? (1.0 / Fhat[0]) : 0.0;
+    FhatInverse[1] = (Fhat[1] > modifiedSVD_singularValue_eps) ? (1.0 / Fhat[1]) : 0.0;
+    FhatInverse[2] = (Fhat[2] > modifiedSVD_singularValue_eps) ? (1.0 / Fhat[2]) : 0.0;
+  
+    // compute U using the formula:
+    // U = F * V * diag(FhatInverse)
+    U = F * V;
+    U.multiplyDiagRight(FhatInverse);
+
+    // In theory, U is now orthonormal, U^T U = U U^T = I .. it may be a rotation or a reflection, depending on F.
+    // But in practice, if singular values are small or zero, it may not be orthonormal, so we need to fix it.
+    // Handle situation:
+    // 2. An entry of Fhat is near zero
+    // ---------------------------------------------------------
+
+    /*
+      printf("--- FhatInverse ---\n");
+      FhatInverse.print();
+      printf(" --- U ---\n");
+      U.print();
+    */
+  
+    if ((Fhat[0] < modifiedSVD_singularValue_eps) && (Fhat[1] < modifiedSVD_singularValue_eps) && (Fhat[2] < modifiedSVD_singularValue_eps))
+    {
+        // extreme case, material has collapsed almost to a point
+        // see [Irving 04], p. 4
+        U.set(1.0, 0.0, 0.0,
+              0.0, 1.0, 0.0,
+              0.0, 0.0, 1.0);
+    }
+    else 
+    {
+        int done = 0;
+        for(int dim=0; dim<3; dim++)
+        {
+            int dimA = dim;
+            int dimB = (dim + 1) % 3;
+            int dimC = (dim + 2) % 3;
+            if ((Fhat[dimB] < modifiedSVD_singularValue_eps) && (Fhat[dimC] < modifiedSVD_singularValue_eps))
+            {
+                // only the column dimA can be trusted, columns dimB and dimC correspond to tiny singular values
+                Vec3d tmpVec1(U[0][dimA], U[1][dimA], U[2][dimA]); // column dimA
+                Vec3d tmpVec2;
+                FindOrthonormalVector(tmpVec1, tmpVec2);
+                Vec3d tmpVec3 = norm(cross(tmpVec1, tmpVec2));
+                U[0][dimB] = tmpVec2[0];
+                U[1][dimB] = tmpVec2[1];
+                U[2][dimB] = tmpVec2[2];
+                U[0][dimC] = tmpVec3[0];
+                U[1][dimC] = tmpVec3[1];
+                U[2][dimC] = tmpVec3[2];
+                if (det(U) < 0.0)
+                {
+                    U[0][dimB] *= -1.0;
+                    U[1][dimB] *= -1.0;
+                    U[2][dimB] *= -1.0;
+                }
+                done = 1;
+                break; // out of for
+            }
+        }
+
+        if (!done) 
+        {
+            for(int dim=0; dim<3; dim++)
+            {
+                int dimA = dim;
+                int dimB = (dim + 1) % 3;
+                int dimC = (dim + 2) % 3;
+
+                if (Fhat[dimA] < modifiedSVD_singularValue_eps)
+                {
+                    // columns dimB and dimC are both good, but column dimA corresponds to a tiny singular value
+                    Vec3d tmpVec1(U[0][dimB], U[1][dimB], U[2][dimB]); // column dimB
+                    Vec3d tmpVec2(U[0][dimC], U[1][dimC], U[2][dimC]); // column dimC
+                    Vec3d tmpVec3 = norm(cross(tmpVec1, tmpVec2));
+                    U[0][dimA] = tmpVec3[0];
+                    U[1][dimA] = tmpVec3[1];
+                    U[2][dimA] = tmpVec3[2];
+                    if (det(U) < 0.0)
+                    {
+                        U[0][dimA] *= -1.0;
+                        U[1][dimA] *= -1.0;
+                        U[2][dimA] *= -1.0;
+                    }
+                    done = 1;
+                    break; // out of for
+                }
+            }
+        }
+
+        if (!done)
+        {
+            // Handle situation:
+            // 3. Tet is inverted.
+            //    - check if det(U) == -1
+            //    - If yes, then negate the minimal element of Fhat
+            //      and the corresponding column of U
+
+            double detU = det(U);
+            if (detU < 0.0)
+            {
+                // tet is inverted
+                // find smallest singular value (they are all non-negative)
+                int smallestSingularValueIndex = 0;
+                for(int dim=1; dim<3; dim++)
+                    if (Fhat[dim] < Fhat[smallestSingularValueIndex])
+                        smallestSingularValueIndex = dim;
+
+                // negate smallest singular value
+                Fhat[smallestSingularValueIndex] *= -1.0;
+                U[0][smallestSingularValueIndex] *= -1.0;
+                U[1][smallestSingularValueIndex] *= -1.0;
+                U[2][smallestSingularValueIndex] *= -1.0;
+            }
+        }
+    }
+
+    /*
+      printf("U = \n");
+      U.print();
+      printf("Fhat = \n");
+      Fhat.print();
+      printf("V = \n");
+      V.print();
+    */
+
+    return 0;
+}
+
+void AnisotropicInternalForces::FindOrthonormalVector(Vec3d & v, Vec3d & result) const
+{
+    // find smallest abs component of v
+    int smallestIndex = 0;
+    for(int dim=1; dim<3; dim++)
+        if (fabs(v[dim]) < fabs(v[smallestIndex]))
+            smallestIndex = dim;
+
+    Vec3d axis(0.0, 0.0, 0.0);
+    axis[smallestIndex] = 1.0;
+
+    // this cross-product will be non-zero (as long as v is not zero)
+    result = norm(cross(v, axis));
+}
+
 void AnisotropicInternalForces::loadElasticTensorOnCoaseMesh(const string &elastic_tensor_file_name)
 {
 	if(!volumetric_mesh_)
@@ -105,7 +308,7 @@ void AnisotropicInternalForces::loadElasticTensorOnCoaseMesh(const string &elast
 	}
 	std::cout<<"------------------------------------------------";
 }
-Mat3d AnisotropicInternalForces::getInistialDisplacementMatrixOnEachElement(unsigned int ele_idx) const//Dm
+Mat3d AnisotropicInternalForces::getInitialDisplacementMatrixOnEachElement(unsigned int ele_idx) const//Dm
 {
 	if(!volumetric_mesh_)
 	{
@@ -183,20 +386,22 @@ Mat3d AnisotropicInternalForces::getDeformationGradient(const Mat3d init_dis_mat
 	//the initial F is identity
 	Mat3d result(1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0);
 	result=current_dis_matrix*inv(init_dis_matrix);
-	for(int i=0;i<3;++i)
-	{
-		for(int j=0;j<3;++j)
-		{
-			if(fabs(result[i][j])<1.0e-7)
-			{
-				result[i][j]=0;
-			}
-		}
-	}
-	if(fabs(det(result))<1.0e-7)
-		return Mat3d(1.0);
-	else
-		return result;
+
+    //handle inversion
+    Mat3d U,V;
+    Vec3d Fhat;
+    ModifiedSVD(result,U,Fhat,V);
+    //clamphat if below the principle stretch threshold
+    double principle_threshold = 0.6;
+    for(unsigned int i = 0; i < 3 ; ++i)
+        if(Fhat[i] < principle_threshold)
+            Fhat[i] = principle_threshold;
+    Mat3d Fhat_mat;
+    for(unsigned int i = 0; i < 3; ++i)
+        for(unsigned int j = 0; j < 3; ++j)
+            Fhat_mat[i][j] = (i==j)?Fhat[i]:0;
+    result = U*Fhat_mat*trans(V);
+    return result;
 }
 double * AnisotropicInternalForces::getCauchyStrainTensor(const Mat3d F) const
 {
@@ -212,9 +417,6 @@ double * AnisotropicInternalForces::getCauchyStrainTensor(const Mat3d F) const
 	result_vector[3]=2.0*result_matrix[1][2];
 	result_vector[4]=2.0*result_matrix[0][2];
 	result_vector[5]=2.0*result_matrix[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 }
 double * AnisotropicInternalForces::getGreenStrainTensor(const Mat3d F) const
@@ -234,9 +436,6 @@ double * AnisotropicInternalForces::getGreenStrainTensor(const Mat3d F) const
 	result_vector[3]=2.0*result_matrix[1][2];
 	result_vector[4]=2.0*result_matrix[0][2];
 	result_vector[5]=2.0*result_matrix[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 } 
 Mat3d AnisotropicInternalForces::firstPiolaKirchhoffStress(unsigned int ele_idx,const Mat3d F,AnisotropicInternalForces::StrainType strain_type) const
@@ -265,9 +464,9 @@ Mat3d AnisotropicInternalForces::secondPiolaKirchhoffStress(unsigned int ele_idx
 	{
 		result_matrix[i][i]=result[i];
 	}
-	result_matrix[1][2]=result_matrix[2][1]=0.5*result[3];
-	result_matrix[0][2]=result_matrix[2][0]=0.5*result[4];
-	result_matrix[0][1]=result_matrix[1][0]=0.5*result[5];
+	result_matrix[1][2]=result_matrix[2][1]=result[3];
+	result_matrix[0][2]=result_matrix[2][0]=result[4];
+	result_matrix[0][1]=result_matrix[1][0]=result[5];
 	delete [] strain_tensor_vector;
 	free(result);
 	return result_matrix;
@@ -304,7 +503,7 @@ void AnisotropicInternalForces::ComputeForces(const double * vertexDisplacements
 		}
 		double ele_volume=tet_mesh_->getTetVolume(tet_mesh_->getVertex(ele_idx,0),tet_mesh_->getVertex(ele_idx,1),tet_mesh_->getVertex(ele_idx,2),tet_mesh_->getVertex(ele_idx,3));		
 		
-		Mat3d init_dis_matrix=getInistialDisplacementMatrixOnEachElement(ele_idx);
+		Mat3d init_dis_matrix=getInitialDisplacementMatrixOnEachElement(ele_idx);
 		Mat3d F=getDeformationGradient(init_dis_matrix,current_dis_matrix[ele_idx]);	
 		Mat3d force_matrix=ele_volume*firstPiolaKirchhoffStress(ele_idx,F,strain_type)*inv(trans(init_dis_matrix));	
 		for(int i =0 ; i < ele_vert_num_; ++i)

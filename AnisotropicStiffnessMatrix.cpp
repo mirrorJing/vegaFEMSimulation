@@ -7,7 +7,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
-#include "AnistropicStiffnessMatrix.h"
+#include "AnisotropicStiffnessMatrix.h"
 #include "tetMesh.h"
 #include "volumetricMesh.h"
 #include "vec3d.h"
@@ -236,22 +236,24 @@ vector<Mat3d> AnisotropicStiffnessMatrix::getCurrentDisplacementMatrixOnAllEleme
 }
 Mat3d AnisotropicStiffnessMatrix::getDeformationGradient(const Mat3d init_dis_matrix, const Mat3d current_dis_matrix) const
 {
+	//the initial F is identity
 	Mat3d result(1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0);
 	result=current_dis_matrix*inv(init_dis_matrix);
-	for(int i=0;i<3;++i)
-	{
-		for(int j=0;j<3;++j)
-		{
-			if(fabs(result[i][j])<1.0e-7)
-			{
-				result[i][j]=0;
-			}
-		}
-	}
-	if(fabs(det(result))<1.0e-7)
-		return (1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0);
-	else
-		return result;
+    //handle inversion
+    Mat3d U,V;
+    Vec3d Fhat;
+    ModifiedSVD(result,U,Fhat,V);
+    //clamphat if below the principle stretch threshold
+    double principle_threshold = 0.6;
+    for(unsigned int i = 0; i < 3 ; ++i)
+        if(Fhat[i] < principle_threshold)
+            Fhat[i] = principle_threshold;
+    Mat3d Fhat_mat;
+    for(unsigned int i = 0; i < 3; ++i)
+        for(unsigned int j = 0; j < 3; ++j)
+            Fhat_mat[i][j] = (i==j)?Fhat[i]:0;
+    result = U*Fhat_mat*trans(V);
+    return result;
 }
 
 Mat3d AnisotropicStiffnessMatrix::getDeformationGradientDerivative(unsigned int ele_idx,unsigned int vert_idx,unsigned int vert_idx_dim) const
@@ -276,8 +278,6 @@ Mat3d AnisotropicStiffnessMatrix::getDeformationGradientDerivative(unsigned int 
 		for(unsigned int col_idx=0;col_idx<3;++col_idx)
 		{
 			e_matrix[row_idx][col_idx]=e_vector[vert_idx_dim][row_idx]*e_vector[vert_idx][col_idx];
-			if(fabs(e_matrix[row_idx][col_idx])<1.0e-7)
-				e_matrix[row_idx][col_idx]=0.0;
 		}
 	}
 	Mat3d init_dis_matrix=getInistialDisplacementMatrixOnEachElement(ele_idx);
@@ -325,9 +325,6 @@ double * AnisotropicStiffnessMatrix::getCauchyStrainTensor(const Mat3d F) const
 	result_vector[3]=2.0*result[1][2];
 	result_vector[4]=2.0*result[0][2];
 	result_vector[5]=2.0*result[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 }
 double * AnisotropicStiffnessMatrix::getGreenStrainTensor(const Mat3d F) const
@@ -348,9 +345,6 @@ double * AnisotropicStiffnessMatrix::getGreenStrainTensor(const Mat3d F) const
 	result_vector[3]=2.0*result[1][2];
 	result_vector[4]=2.0*result[0][2];
 	result_vector[5]=2.0*result[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 }
 
@@ -368,9 +362,6 @@ double * AnisotropicStiffnessMatrix::getCauchyStrainTensorDerivative(unsigned in
 	result_vector[3]=2.0*result_matrix[1][2];
 	result_vector[4]=2.0*result_matrix[0][2];
 	result_vector[5]=2.0*result_matrix[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 }
 double * AnisotropicStiffnessMatrix::getGreenStrainTensorDerivative(unsigned int ele_idx,unsigned int vert_idx,unsigned int vert_idx_dim,const Mat3d F) const
@@ -382,15 +373,10 @@ double * AnisotropicStiffnessMatrix::getGreenStrainTensorDerivative(unsigned int
 	result_matrix=0.5*trans(F_derivative)*F;
 	result_matrix+=0.5*trans(F)*F_derivative;
 	for(unsigned int i=0;i<3;++i)
-	{
 		result_vector[i]=result_matrix[i][i];
-	}
 	result_vector[3]=2.0*result_matrix[1][2];
 	result_vector[4]=2.0*result_matrix[0][2];
 	result_vector[5]=2.0*result_matrix[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 }
 
@@ -420,9 +406,9 @@ Mat3d AnisotropicStiffnessMatrix::firstPiolaKirchhoffStressDerivative(unsigned i
 	{
 		elastic_multiply_strain_matrix[i][i]=elastic_multiply_strain[i];
 	}
-	elastic_multiply_strain_matrix[1][2]=elastic_multiply_strain_matrix[2][1]=0.5*elastic_multiply_strain[3];
-	elastic_multiply_strain_matrix[0][2]=elastic_multiply_strain_matrix[2][0]=0.5*elastic_multiply_strain[4];
-	elastic_multiply_strain_matrix[0][1]=elastic_multiply_strain_matrix[1][0]=0.5*elastic_multiply_strain[5];
+	elastic_multiply_strain_matrix[1][2]=elastic_multiply_strain_matrix[2][1]=elastic_multiply_strain[3];
+	elastic_multiply_strain_matrix[0][2]=elastic_multiply_strain_matrix[2][0]=elastic_multiply_strain[4];
+	elastic_multiply_strain_matrix[0][1]=elastic_multiply_strain_matrix[1][0]=elastic_multiply_strain[5];
 	const Mat3d F_derivative=getDeformationGradientDerivative(ele_idx,vert_idx,vert_idx_dim);	
 	//compute C*dE/dx_j^k and convert a 6*1 vector to a 3*3 matrix
 	double * elastic_multiply_strain_derivative;
@@ -447,9 +433,9 @@ Mat3d AnisotropicStiffnessMatrix::firstPiolaKirchhoffStressDerivative(unsigned i
 	{
 		elastic_multiply_strain_derivative_matrix[i][i]=elastic_multiply_strain_derivative[i];
 	}
-	elastic_multiply_strain_derivative_matrix[1][2]=elastic_multiply_strain_derivative_matrix[2][1]=0.5*elastic_multiply_strain_derivative[3];
-	elastic_multiply_strain_derivative_matrix[0][2]=elastic_multiply_strain_derivative_matrix[2][0]=0.5*elastic_multiply_strain_derivative[4];
-	elastic_multiply_strain_derivative_matrix[0][1]=elastic_multiply_strain_derivative_matrix[1][0]=0.5*elastic_multiply_strain_derivative[5];
+	elastic_multiply_strain_derivative_matrix[1][2]=elastic_multiply_strain_derivative_matrix[2][1]=elastic_multiply_strain_derivative[3];
+	elastic_multiply_strain_derivative_matrix[0][2]=elastic_multiply_strain_derivative_matrix[2][0]=elastic_multiply_strain_derivative[4];
+	elastic_multiply_strain_derivative_matrix[0][1]=elastic_multiply_strain_derivative_matrix[1][0]=elastic_multiply_strain_derivative[5];
 	Mat3d result_matrix(0.0);
 	result_matrix=F_derivative*elastic_multiply_strain_matrix;
 	result_matrix+=F*elastic_multiply_strain_derivative_matrix;
@@ -519,4 +505,206 @@ void AnisotropicStiffnessMatrix::ComputeStiffnessMatrix(double * vertexDisplacem
 	}
 	//getchar();
 
+}
+
+int AnisotropicStiffnessMatrix::ModifiedSVD(Mat3d & F, Mat3d & U, Vec3d & Fhat, Mat3d & V) const
+{
+    // The code handles the following necessary special situations (see the code below) :
+
+    //---------------------------------------------------------
+    // 1. det(V) == -1
+    //    - simply multiply a column of V by -1
+    //---------------------------------------------------------
+    // 2. An entry of Fhat is near zero
+    //---------------------------------------------------------
+    // 3. Tet is inverted.
+    //    - check if det(U) == -1
+    //    - If yes, then negate the minimal element of Fhat
+    //      and the corresponding column of U
+    //---------------------------------------------------------
+
+    double modifiedSVD_singularValue_eps = 1e-8;
+
+    // form F^T F and do eigendecomposition
+    Mat3d normalEq = trans(F) * F;
+    Vec3d eigenValues;
+    Vec3d eigenVectors[3];
+
+    // note that normalEq is changed after calling eigen_sym
+    eigen_sym(normalEq, eigenValues, eigenVectors);
+
+    V.set(eigenVectors[0][0], eigenVectors[1][0], eigenVectors[2][0],
+          eigenVectors[0][1], eigenVectors[1][1], eigenVectors[2][1],
+          eigenVectors[0][2], eigenVectors[1][2], eigenVectors[2][2]);
+    /*
+      printf("--- original V ---\n");
+      V.print();
+      printf("--- eigenValues ---\n");
+      printf("%G %G %G\n", eigenValues[0], eigenValues[1], eigenValues[2]);
+    */
+
+    // Handle situation:
+    // 1. det(V) == -1
+    //    - simply multiply a column of V by -1
+    if (det(V) < 0.0)
+    {
+        // convert V into a rotation (multiply column 1 by -1)
+        V[0][0] *= -1.0;
+        V[1][0] *= -1.0;
+        V[2][0] *= -1.0;
+    }
+
+    Fhat[0] = (eigenValues[0] > 0.0) ? sqrt(eigenValues[0]) : 0.0;
+    Fhat[1] = (eigenValues[1] > 0.0) ? sqrt(eigenValues[1]) : 0.0;
+    Fhat[2] = (eigenValues[2] > 0.0) ? sqrt(eigenValues[2]) : 0.0;
+
+    //printf("--- Fhat ---\n");
+    //printf("%G %G %G\n", Fhat[0][0], Fhat[1][1], Fhat[2][2]);
+
+    // compute inverse of singular values
+    // also check if singular values are close to zero
+    Vec3d FhatInverse;
+    FhatInverse[0] = (Fhat[0] > modifiedSVD_singularValue_eps) ? (1.0 / Fhat[0]) : 0.0;
+    FhatInverse[1] = (Fhat[1] > modifiedSVD_singularValue_eps) ? (1.0 / Fhat[1]) : 0.0;
+    FhatInverse[2] = (Fhat[2] > modifiedSVD_singularValue_eps) ? (1.0 / Fhat[2]) : 0.0;
+  
+    // compute U using the formula:
+    // U = F * V * diag(FhatInverse)
+    U = F * V;
+    U.multiplyDiagRight(FhatInverse);
+
+    // In theory, U is now orthonormal, U^T U = U U^T = I .. it may be a rotation or a reflection, depending on F.
+    // But in practice, if singular values are small or zero, it may not be orthonormal, so we need to fix it.
+    // Handle situation:
+    // 2. An entry of Fhat is near zero
+    // ---------------------------------------------------------
+
+    /*
+      printf("--- FhatInverse ---\n");
+      FhatInverse.print();
+      printf(" --- U ---\n");
+      U.print();
+    */
+  
+    if ((Fhat[0] < modifiedSVD_singularValue_eps) && (Fhat[1] < modifiedSVD_singularValue_eps) && (Fhat[2] < modifiedSVD_singularValue_eps))
+    {
+        // extreme case, material has collapsed almost to a point
+        // see [Irving 04], p. 4
+        U.set(1.0, 0.0, 0.0,
+              0.0, 1.0, 0.0,
+              0.0, 0.0, 1.0);
+    }
+    else 
+    {
+        int done = 0;
+        for(int dim=0; dim<3; dim++)
+        {
+            int dimA = dim;
+            int dimB = (dim + 1) % 3;
+            int dimC = (dim + 2) % 3;
+            if ((Fhat[dimB] < modifiedSVD_singularValue_eps) && (Fhat[dimC] < modifiedSVD_singularValue_eps))
+            {
+                // only the column dimA can be trusted, columns dimB and dimC correspond to tiny singular values
+                Vec3d tmpVec1(U[0][dimA], U[1][dimA], U[2][dimA]); // column dimA
+                Vec3d tmpVec2;
+                FindOrthonormalVector(tmpVec1, tmpVec2);
+                Vec3d tmpVec3 = norm(cross(tmpVec1, tmpVec2));
+                U[0][dimB] = tmpVec2[0];
+                U[1][dimB] = tmpVec2[1];
+                U[2][dimB] = tmpVec2[2];
+                U[0][dimC] = tmpVec3[0];
+                U[1][dimC] = tmpVec3[1];
+                U[2][dimC] = tmpVec3[2];
+                if (det(U) < 0.0)
+                {
+                    U[0][dimB] *= -1.0;
+                    U[1][dimB] *= -1.0;
+                    U[2][dimB] *= -1.0;
+                }
+                done = 1;
+                break; // out of for
+            }
+        }
+
+        if (!done) 
+        {
+            for(int dim=0; dim<3; dim++)
+            {
+                int dimA = dim;
+                int dimB = (dim + 1) % 3;
+                int dimC = (dim + 2) % 3;
+
+                if (Fhat[dimA] < modifiedSVD_singularValue_eps)
+                {
+                    // columns dimB and dimC are both good, but column dimA corresponds to a tiny singular value
+                    Vec3d tmpVec1(U[0][dimB], U[1][dimB], U[2][dimB]); // column dimB
+                    Vec3d tmpVec2(U[0][dimC], U[1][dimC], U[2][dimC]); // column dimC
+                    Vec3d tmpVec3 = norm(cross(tmpVec1, tmpVec2));
+                    U[0][dimA] = tmpVec3[0];
+                    U[1][dimA] = tmpVec3[1];
+                    U[2][dimA] = tmpVec3[2];
+                    if (det(U) < 0.0)
+                    {
+                        U[0][dimA] *= -1.0;
+                        U[1][dimA] *= -1.0;
+                        U[2][dimA] *= -1.0;
+                    }
+                    done = 1;
+                    break; // out of for
+                }
+            }
+        }
+
+        if (!done)
+        {
+            // Handle situation:
+            // 3. Tet is inverted.
+            //    - check if det(U) == -1
+            //    - If yes, then negate the minimal element of Fhat
+            //      and the corresponding column of U
+
+            double detU = det(U);
+            if (detU < 0.0)
+            {
+                // tet is inverted
+                // find smallest singular value (they are all non-negative)
+                int smallestSingularValueIndex = 0;
+                for(int dim=1; dim<3; dim++)
+                    if (Fhat[dim] < Fhat[smallestSingularValueIndex])
+                        smallestSingularValueIndex = dim;
+
+                // negate smallest singular value
+                Fhat[smallestSingularValueIndex] *= -1.0;
+                U[0][smallestSingularValueIndex] *= -1.0;
+                U[1][smallestSingularValueIndex] *= -1.0;
+                U[2][smallestSingularValueIndex] *= -1.0;
+            }
+        }
+    }
+
+    /*
+      printf("U = \n");
+      U.print();
+      printf("Fhat = \n");
+      Fhat.print();
+      printf("V = \n");
+      V.print();
+    */
+
+    return 0;
+}
+
+void AnisotropicStiffnessMatrix::FindOrthonormalVector(Vec3d & v, Vec3d & result) const
+{
+    // find smallest abs component of v
+    int smallestIndex = 0;
+    for(int dim=1; dim<3; dim++)
+        if (fabs(v[dim]) < fabs(v[smallestIndex]))
+            smallestIndex = dim;
+
+    Vec3d axis(0.0, 0.0, 0.0);
+    axis[smallestIndex] = 1.0;
+
+    // this cross-product will be non-zero (as long as v is not zero)
+    result = norm(cross(v, axis));
 }

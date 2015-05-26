@@ -4,7 +4,7 @@
 #define _AnisotropicStiffnessMatrix_H_
 
 #include <string>
-#include "AnistropicInternalForces.h"
+#include "AnisotropicInternalForces.h"
 #include "mat3d.h"
 #include "sparseMatrix.h"
 /*
@@ -72,6 +72,10 @@ protected:
 
 	// adds a 3x3 block matrix corresponding to a derivative of force on vertex c wrt to vertex a
 	inline void AddMatrix3x3Block(int c, int a, int element, Mat3d & matrix, SparseMatrix * sparseMatrix);
+
+    int ModifiedSVD(Mat3d & F, Mat3d & U, Vec3d & Fhat, Mat3d & V) const;    //modified SVD for inversion handling
+    // given a vector, find a unit vector that is orthogonal to it
+    void FindOrthonormalVector(Vec3d & v, Vec3d & result) const;
 };
 
 inline void AnisotropicStiffnessMatrix::AddMatrix3x3Block(int c, int a, int element, Mat3d & matrix, SparseMatrix * sparseMatrix)

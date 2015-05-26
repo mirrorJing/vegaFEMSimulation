@@ -6,9 +6,9 @@ implicitBackwardEuler
 
 *deformableObjectMethod
 #Anisotropic
-#StVK
+StVK
 #CLFEM
-InvertibleFEM
+#InvertibleFEM
 
 *invertibleMaterial
 StVK

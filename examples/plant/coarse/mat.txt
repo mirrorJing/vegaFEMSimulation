@@ -1,4 +1,4 @@
 *MATERIAL defaultMaterial
-ENU, 1000.0,1e+007,0.3
+ENU, 10000.0,1e+008,0.3
 *REGION
 allElements, defaultMaterial

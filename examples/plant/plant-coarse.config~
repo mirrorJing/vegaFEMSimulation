@@ -5,8 +5,8 @@ implicitBackwardEuler
 #Euler
 
 *deformableObjectMethod
-Anisotropic
-#StVK
+#Anisotropic
+StVK
 #InvertibleFEM
 #CLFEM
 
@@ -44,7 +44,7 @@ obj/plant/coarse/obj_file
 examples/plant/plant.lighting
 
 *elasticTensorFilename
-examples/plant/coarse/coarse-elastic-tensor.txt
+examples/plant/coarse/coarse-elastic-tensor-stable.txt
 
 *timeStep
 0.0005

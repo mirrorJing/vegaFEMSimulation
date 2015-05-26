@@ -37,9 +37,8 @@ examples/plant/fine/plant-fine-fixed.bou
 
 *massMatrixFilename
 examples/plant/fine/plant-fine.mass
-
 *outputFileNameBase
-obj/plant/fine2/obj_file
+obj/plant/fine3/obj_file
 
 #*forceLoadsFilename
 #examples/plant/fine/force.txt

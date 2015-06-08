@@ -1677,12 +1677,18 @@ void initFunction(int test_case_)
 			init_E[material_index] = init_material->getE();
 		}
 		//set material for each vertex
-		double y_min=-0.37976,y_max=0.48449;
+		/*double y_min=-0.37976,y_max=0.48449;
 		double p1_x_min=-0.31921,p1_x_max=-0.042;
 		double p2_x_min=-0.46597,p2_x_max=-0.09092;
 		double p3_x_min=-0.042,p3_x_max=0.28413;
 		double p4_x_min=0.28413,p4_x_max=0.4635;
-		double p5_x_min=0.07214,p5_x_max=0.52872;
+		double p5_x_min=0.07214,p5_x_max=0.52872;*/
+		double y_min=-0.404317,y_max=0.490068;
+		double p1_x_min=-0.334443,p1_x_max=-0.018748;
+		double p2_x_min=-0.494211,p2_x_max=-0.05895;
+		double p3_x_min=-0.051581,p3_x_max=0.298737;
+		double p4_x_min=0.276187,p4_x_max=0.55369;
+		double p5_x_min=0.078437,p5_x_max=0.538656;
 		for(unsigned int i=1;i<volumetricMesh->getNumSets();++i)
 		{
 			VolumetricMesh::Set * element_set=volumetricMesh->getSet(i);
@@ -1776,8 +1782,8 @@ void initFunction(int test_case_)
 		}
 		write_file.close();
 		//store new youngs_modulus for each element
-		string output_vertex_youngs="examples/plant/new_youngs.txt";
-		std::ofstream write_file1(output_vertex_youngs);
+		string output_ele_youngs="examples/plant/new_youngs.txt";
+		std::ofstream write_file1(output_ele_youngs);
 		for(unsigned int i=0;i<volumetricMesh->getNumElements();++i)
 		{
 			write_file1<<ele_youngs_modulus[i]<<" ";	
@@ -1785,6 +1791,38 @@ void initFunction(int test_case_)
 				write_file1<<std::endl;
 		}
 		write_file1.close();
+		//store new .hinp files for large model software to compute modal basis displacement
+		string output_ele_hinp="examples/plant/plant-new.hinp";
+		std::ofstream write_file2(output_ele_hinp);
+		write_file2<<"*HEADING"<<std::endl;
+		write_file2<<"Model: tet mesh"<<std::endl;
+		write_file2<<"*INCLUDE, INPUT=plant-fine.abq"<<std::endl;
+		std::stringstream stream;
+		std::string index_str="";
+		for(unsigned int i=0;i<volumetricMesh->getNumElements();++i)
+		{
+			stream.clear();
+			stream.str("");
+			stream<<i;
+			stream>>index_str;
+			write_file2<<"*ELSET,ELSET=plant"<<index_str<<std::endl;
+			write_file2<<i<<std::endl;
+			write_file2<<"*MATERIAL,NAME=mat"<<index_str<<std::endl;
+			write_file2<<"*ELASTIC"<<std::endl;
+			write_file2<<ele_youngs_modulus[i]<<",0.3"<<std::endl;
+			write_file2<<"*DENSITY"<<std::endl;
+			write_file2<<"1000.0"<<std::endl;
+			write_file2<<"*SOLID SECTION,MATERIAL=mat"<<index_str<<",ELSET=plant"<<index_str<<std::endl;
+		}
+		write_file2<<"*ELSET,ELSET=plant_rest"<<std::endl;
+		write_file2<<" "<<std::endl;
+		write_file2<<"*MATERIAL,NAME=mat_rest"<<std::endl;
+		write_file2<<"*ELASTIC"<<std::endl;
+		write_file2<<"5e+005,0.3"<<std::endl;
+		write_file2<<"*DENSITY"<<std::endl;
+		write_file2<<"1000.0"<<std::endl;
+		write_file2<<"*SOLID SECTION,MATERIAL=mat_rest,ELSET=plant_rest"<<std::endl;
+		write_file2.close();
 		//set initial deformed position
 		
 		for(unsigned int i=0;i<simulation_vertice_num;++i)

@@ -1,4 +1,0 @@
-*MATERIAL defaultMaterial
-ENU, 10000.0,1e+008,0.3
-*REGION
-allElements, defaultMaterial

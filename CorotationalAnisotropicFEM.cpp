@@ -258,16 +258,6 @@ Mat3d CorotationalAnisotropicFEM::getDeformationGradient(const Mat3d init_dis_ma
 {
 	Mat3d result(1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0);
 	result=current_dis_matrix*inv(init_dis_matrix);
-	for(int i=0;i<3;++i)
-	{
-		for(int j=0;j<3;++j)
-		{
-			if(fabs(result[i][j])<1.0e-7)
-			{
-				result[i][j]=0;
-			}
-		}
-	}
 	if(fabs(det(result))<1.0e-7)
 		return (1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0);
 	else
@@ -345,9 +335,6 @@ double * CorotationalAnisotropicFEM::getCauchyStrainTensor(const Mat3d F) const
 	result_vector[3]=2.0*result[1][2];
 	result_vector[4]=2.0*result[0][2];
 	result_vector[5]=2.0*result[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 }
 double * CorotationalAnisotropicFEM::getGreenStrainTensor(const Mat3d F) const
@@ -368,9 +355,6 @@ double * CorotationalAnisotropicFEM::getGreenStrainTensor(const Mat3d F) const
 	result_vector[3]=2.0*result[1][2];
 	result_vector[4]=2.0*result[0][2];
 	result_vector[5]=2.0*result[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 }
 
@@ -388,9 +372,6 @@ double * CorotationalAnisotropicFEM::getCauchyStrainTensorDerivative(unsigned in
 	result_vector[3]=2.0*result_matrix[1][2];
 	result_vector[4]=2.0*result_matrix[0][2];
 	result_vector[5]=2.0*result_matrix[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 }
 double * CorotationalAnisotropicFEM::getGreenStrainTensorDerivative(unsigned int ele_idx,unsigned int vert_idx,unsigned int vert_idx_dim,const Mat3d F) const
@@ -408,9 +389,6 @@ double * CorotationalAnisotropicFEM::getGreenStrainTensorDerivative(unsigned int
 	result_vector[3]=2.0*result_matrix[1][2];
 	result_vector[4]=2.0*result_matrix[0][2];
 	result_vector[5]=2.0*result_matrix[0][1];
-	for(int i=0;i<6;++i)
-		if(fabs(result_vector[i])<1.0e-7)
-			result_vector[i]=0;
 	return result_vector;
 }
 

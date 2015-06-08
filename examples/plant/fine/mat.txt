@@ -37,6 +37,6 @@ plant5,mat5
 *SET plant_rest
 *INCLUDE plant_rest.txt
 *MATERIAL mat_rest
-ENU, 1000, 1e+005,0.3
+ENU, 1000, 500000,0.3
 *REGION
 plant_rest,mat_rest
